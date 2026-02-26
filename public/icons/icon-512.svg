@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981"/>
+      <stop offset="100%" style="stop-color:#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <!-- Leaf / nutrition symbol -->
+  <g transform="translate(256, 240)">
+    <path d="M-60,60 Q-60,-80 80,-80 Q80,60 -60,60 Z" fill="url(#accent)" opacity="0.9"/>
+    <path d="M-60,60 Q10,10 80,-80" stroke="#0f172a" stroke-width="6" fill="none" opacity="0.5"/>
+    <path d="M-20,40 Q10,10 40,-20" stroke="#0f172a" stroke-width="4" fill="none" opacity="0.3"/>
+    <path d="M-40,50 Q-10,20 20,0" stroke="#0f172a" stroke-width="4" fill="none" opacity="0.3"/>
+  </g>
+  <!-- Camera aperture indicator -->
+  <circle cx="256" cy="240" r="100" fill="none" stroke="url(#accent)" stroke-width="3" opacity="0.3" stroke-dasharray="20 10"/>
+  <!-- Text -->
+  <text x="256" y="400" text-anchor="middle" font-family="Inter, sans-serif" font-weight="700" font-size="48" fill="white" opacity="0.95">NutriSnap</text>
+</svg>
