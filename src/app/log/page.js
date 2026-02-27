@@ -1,31 +1,58 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { getMealsForDate, getAllMeals, deleteMeal, getDailyCalories } from '../lib/storage';
+import { getAllMeals, deleteMeal, getProfile, getWeeklyStats } from '../actions';
 import NutritionCard from '../components/NutritionCard';
+import WeeklyChart from '../components/WeeklyChart';
+import AIInsight from '../components/AIInsight';
 import { IoCalendarOutline, IoFastFoodOutline, IoFlameOutline } from 'react-icons/io5';
 
 export default function LogPage() {
     const [view, setView] = useState('today');
     const [meals, setMeals] = useState([]);
+    const [todayCalories, setTodayCalories] = useState(0);
+    const [profile, setProfile] = useState(null);
+    const [weeklyStats, setWeeklyStats] = useState([]);
     const [mounted, setMounted] = useState(false);
 
-    const loadMeals = useCallback(() => {
-        if (view === 'today') {
-            setMeals(getMealsForDate());
-        } else {
-            setMeals(getAllMeals().slice(0, 50));
+    const loadMeals = useCallback(async () => {
+        try {
+            const offset = new Date().getTimezoneOffset();
+            const all = await getAllMeals();
+            setProfile(await getProfile());
+            setWeeklyStats(await getWeeklyStats(offset));
+
+            // Client local "today"
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - offset);
+            const todayStr = now.toISOString().split('T')[0];
+
+            const todayMeals = all.filter(m => {
+                if (!m.timestamp) return false;
+                const d = new Date(m.timestamp);
+                d.setMinutes(d.getMinutes() - offset);
+                return d.toISOString().split('T')[0] === todayStr;
+            });
+
+            setTodayCalories(todayMeals.reduce((s, m) => s + (m.totalCalories || 0), 0));
+
+            if (view === 'today') {
+                setMeals(todayMeals);
+            } else {
+                setMeals(all.slice(0, 50));
+            }
+        } catch (e) {
+            console.error('Failed to load meals', e);
         }
     }, [view]);
 
     useEffect(() => {
-        loadMeals();
-        setMounted(true);
+        loadMeals().finally(() => setMounted(true));
     }, [loadMeals]);
 
-    const handleDelete = (id) => {
-        deleteMeal(id);
-        loadMeals();
+    const handleDelete = async (id) => {
+        await deleteMeal(id);
+        await loadMeals();
     };
 
     if (!mounted) {
@@ -36,7 +63,7 @@ export default function LogPage() {
         );
     }
 
-    const todayCalories = getDailyCalories();
+
     const mealsByDate = groupMealsByDate(meals);
 
     return (
@@ -62,6 +89,17 @@ export default function LogPage() {
                     </button>
                 ))}
             </div>
+
+            {/* AI Insights & Charts */}
+            {view === 'all' && weeklyStats.length > 0 && (
+                <div className="space-y-6 mt-4 mb-6">
+                    <AIInsight weeklyStats={weeklyStats} profile={profile} />
+                    <WeeklyChart
+                        data={weeklyStats}
+                        dailyCalorieTarget={profile?.dailyCalorieTarget || 2000}
+                    />
+                </div>
+            )}
 
             {/* Today Summary */}
             {view === 'today' && (
@@ -121,19 +159,33 @@ export default function LogPage() {
 
 function groupMealsByDate(meals) {
     const groups = {};
+    const offset = new Date().getTimezoneOffset();
     meals.forEach((m) => {
-        const date = m.timestamp?.split('T')[0] || 'unknown';
-        if (!groups[date]) groups[date] = [];
-        groups[date].push(m);
+        let dateStr = 'unknown';
+        if (m.timestamp) {
+            const d = new Date(m.timestamp);
+            d.setMinutes(d.getMinutes() - offset);
+            dateStr = d.toISOString().split('T')[0];
+        }
+        if (!groups[dateStr]) groups[dateStr] = [];
+        groups[dateStr].push(m);
     });
     return groups;
 }
 
 function formatDate(dateStr) {
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    if (dateStr === today) return 'Today';
-    if (dateStr === yesterday) return 'Yesterday';
+    const offset = new Date().getTimezoneOffset();
+    const today = new Date();
+    today.setMinutes(today.getMinutes() - offset);
+    const todayStr = today.toISOString().split('T')[0];
+
+    const yesterday = new Date();
+    yesterday.setMinutes(yesterday.getMinutes() - offset);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    if (dateStr === todayStr) return 'Today';
+    if (dateStr === yesterdayStr) return 'Yesterday';
     return new Date(dateStr).toLocaleDateString('en-US', {
         weekday: 'short',
         month: 'short',

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getProfile, saveProfile, getWeightHistory, saveWeight, deleteWeight } from '../lib/storage';
+import { getProfile, saveProfile, getWeightHistory, saveWeight, deleteWeight } from '../actions';
 import { IoScaleOutline, IoBodyOutline, IoFlameOutline, IoAddCircleOutline, IoTrashOutline, IoSaveOutline } from 'react-icons/io5';
 
 const ACTIVITY_LEVELS = [
@@ -20,31 +20,35 @@ export default function ProfilePage() {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-        setProfile(getProfile());
-        setWeights(getWeightHistory());
-        setMounted(true);
+        async function load() {
+            setProfile(await getProfile());
+            setWeights(await getWeightHistory());
+            setMounted(true);
+        }
+        load();
     }, []);
 
-    const handleSave = () => {
-        saveProfile(profile);
+    const handleSave = async () => {
+        await saveProfile(profile);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
     };
 
-    const handleAddWeight = () => {
+    const handleAddWeight = async () => {
         if (!newWeight || isNaN(parseFloat(newWeight))) return;
-        saveWeight({ weight: parseFloat(newWeight) });
-        setWeights(getWeightHistory());
+        const offset = new Date().getTimezoneOffset();
+        await saveWeight({ weight: parseFloat(newWeight), timezoneOffset: offset });
+        setWeights(await getWeightHistory());
         setNewWeight('');
         // Auto-update current weight on profile
         const updatedProfile = { ...profile, currentWeight: parseFloat(newWeight) };
         setProfile(updatedProfile);
-        saveProfile(updatedProfile);
+        await saveProfile(updatedProfile);
     };
 
-    const handleDeleteWeight = (id) => {
-        deleteWeight(id);
-        setWeights(getWeightHistory());
+    const handleDeleteWeight = async (id) => {
+        await deleteWeight(id);
+        setWeights(await getWeightHistory());
     };
 
     const updateField = (key, value) => {
@@ -140,8 +144,8 @@ export default function ProfilePage() {
                                 key={level.value}
                                 onClick={() => updateField('activityLevel', level.value)}
                                 className={`flex items-center justify-between p-3 rounded-xl border transition-all ${profile.activityLevel === level.value
-                                        ? 'border-primary-500/50 bg-primary-500/10'
-                                        : 'border-dark-700/50 bg-dark-900/50 hover:border-dark-600'
+                                    ? 'border-primary-500/50 bg-primary-500/10'
+                                    : 'border-dark-700/50 bg-dark-900/50 hover:border-dark-600'
                                     }`}
                             >
                                 <div>
@@ -162,8 +166,8 @@ export default function ProfilePage() {
             <button
                 onClick={handleSave}
                 className={`w-full font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${saved
-                        ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                        : 'gradient-primary text-white hover:shadow-lg hover:shadow-primary-500/30'
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : 'gradient-primary text-white hover:shadow-lg hover:shadow-primary-500/30'
                     }`}
             >
                 <IoSaveOutline />
@@ -247,7 +251,11 @@ function InputField({ label, value, onChange, type = 'text', placeholder }) {
 }
 
 function formatDate(dateStr) {
-    const today = new Date().toISOString().split('T')[0];
-    if (dateStr === today) return 'Today';
+    const offset = new Date().getTimezoneOffset();
+    const today = new Date();
+    today.setMinutes(today.getMinutes() - offset);
+    const todayStr = today.toISOString().split('T')[0];
+
+    if (dateStr === todayStr) return 'Today';
     return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }

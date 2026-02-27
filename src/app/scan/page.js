@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { saveMeal, savePendingUpload, getPendingUploads, removePendingUpload } from '../lib/storage';
+import { savePendingUpload, getPendingUploads, removePendingUpload } from '../lib/storage';
+import { saveMeal } from '../actions';
 import NutritionCard from '../components/NutritionCard';
 import { IoCameraOutline, IoImageOutline, IoCloseCircle, IoCheckmarkCircle, IoRefreshOutline, IoTextOutline } from 'react-icons/io5';
 
@@ -21,6 +22,14 @@ export default function ScanPage() {
     const fileInputRef = useRef(null);
     const streamRef = useRef(null);
     const [pendingUploads, setPendingUploads] = useState([]);
+
+    // Default to current local time in YYYY-MM-DDThh:mm format for datetime-local
+    const getLocalISOString = () => {
+        const d = new Date();
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        return d.toISOString().slice(0, 16);
+    };
+    const [mealTime, setMealTime] = useState(getLocalISOString());
 
     const loadPendingUploads = useCallback(async () => {
         const uploads = await getPendingUploads();
@@ -69,15 +78,68 @@ export default function ScanPage() {
         stopCamera();
     }, [stopCamera]);
 
-    const handleFileSelect = (e) => {
+    const compressImage = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 1024;
+                    const MAX_HEIGHT = 1024;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    resolve(dataUrl);
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    };
+
+    const handleFileSelect = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            setPreview(reader.result);
-            setImage(reader.result.split(',')[1]);
-        };
-        reader.readAsDataURL(file);
+
+        try {
+            const dataUrl = await compressImage(file);
+            setPreview(dataUrl);
+            setImage(dataUrl.split(',')[1]);
+
+            // Set meal time to when the photo was originally taken, if available
+            if (file.lastModified) {
+                const d = new Date(file.lastModified);
+                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                setMealTime(d.toISOString().slice(0, 16));
+            } else {
+                setMealTime(getLocalISOString());
+            }
+        } catch (err) {
+            setError('Failed to process image file');
+        }
+
         setResult(null);
         setSaved(false);
         setError(null);
@@ -159,6 +221,12 @@ export default function ScanPage() {
             setResult(data);
             setPreview(`data:${upload.mimeType};base64,${upload.image}`);
             setImage(upload.image);
+
+            if (upload.timestamp) {
+                const d = new Date(upload.timestamp);
+                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                setMealTime(d.toISOString().slice(0, 16));
+            }
         } catch (err) {
             setError('Retry failed: ' + err.message);
         } finally {
@@ -166,9 +234,13 @@ export default function ScanPage() {
         }
     };
 
-    const logMeal = () => {
+    const logMeal = async () => {
         if (!result) return;
-        saveMeal(result);
+
+        // Convert local datetime back to UTC for saving
+        const isoTimestamp = new Date(mealTime).toISOString();
+
+        await saveMeal(result, isoTimestamp);
         setSaved(true);
     };
 
@@ -180,6 +252,7 @@ export default function ScanPage() {
         setSaved(false);
         setTextInput('');
         setImageDescription('');
+        setMealTime(getLocalISOString());
         stopCamera();
     };
 
@@ -371,13 +444,24 @@ export default function ScanPage() {
                     <NutritionCard meal={result} showActions={false} />
 
                     {!saved ? (
-                        <button
-                            onClick={logMeal}
-                            className="w-full gradient-primary text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-primary-500/30 active:scale-[0.98]"
-                        >
-                            <IoCheckmarkCircle className="text-xl" />
-                            Log This Meal
-                        </button>
+                        <>
+                            <div className="glass rounded-xl p-4 flex items-center justify-between">
+                                <span className="text-dark-200 text-sm font-medium">Meal Time:</span>
+                                <input
+                                    type="datetime-local"
+                                    value={mealTime}
+                                    onChange={(e) => setMealTime(e.target.value)}
+                                    className="bg-dark-900 border border-dark-700 text-dark-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary-500"
+                                />
+                            </div>
+                            <button
+                                onClick={logMeal}
+                                className="w-full gradient-primary text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-primary-500/30 active:scale-[0.98]"
+                            >
+                                <IoCheckmarkCircle className="text-xl" />
+                                Log This Meal
+                            </button>
+                        </>
                     ) : (
                         <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-center">
                             <p className="text-green-400 text-sm font-medium flex items-center justify-center gap-2">

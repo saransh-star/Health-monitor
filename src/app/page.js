@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import CalorieRing from './components/CalorieRing';
 import MacroBar from './components/MacroBar';
 import NutritionCard from './components/NutritionCard';
-import { getProfile, getMealsForDate, getDailyCalories, getDailyMacros, getStreak } from './lib/storage';
+import { getProfile, getDashboardStats } from './actions';
 import { IoFlameOutline, IoTrendingDownOutline, IoSparklesOutline } from 'react-icons/io5';
 import Link from 'next/link';
 import { UserButton } from '@clerk/nextjs';
@@ -18,13 +18,25 @@ export default function Dashboard() {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-        const p = getProfile();
-        setProfile(p);
-        setCalories(getDailyCalories());
-        setMacros(getDailyMacros());
-        setRecentMeals(getMealsForDate().slice(0, 3));
-        setStreak(getStreak());
-        setMounted(true);
+        async function load() {
+            try {
+                const offset = new Date().getTimezoneOffset();
+                const p = await getProfile();
+                const stats = await getDashboardStats(offset);
+                setProfile(p);
+                if (stats) {
+                    setCalories(stats.dailyMacros.calories);
+                    setMacros(stats.dailyMacros);
+                    setRecentMeals(stats.recentMeals);
+                    setStreak(stats.streak);
+                }
+            } catch (err) {
+                console.error('Failed to load dashboard data:', err);
+            } finally {
+                setMounted(true);
+            }
+        }
+        load();
     }, []);
 
     if (!mounted) {

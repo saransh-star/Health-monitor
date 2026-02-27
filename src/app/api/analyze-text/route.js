@@ -1,6 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextResponse } from 'next/server';
 
+export const maxDuration = 60; // Allows Vercel hobby tier to run up to 60s without 504 Timeout
+
 const genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
 
 const SYSTEM_PROMPT = `You are an expert nutritionist AI. Analyze the food described in the text and provide a detailed nutritional breakdown.
