@@ -13,15 +13,11 @@ export default function ScanPage() {
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
     const [saved, setSaved] = useState(false);
-    const [cameraActive, setCameraActive] = useState(false);
     const [inputMode, setInputMode] = useState('image'); // 'image' or 'text'
     const [textInput, setTextInput] = useState('');
     const [imageDescription, setImageDescription] = useState('');
-    const videoRef = useRef(null);
-    const canvasRef = useRef(null);
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
-    const streamRef = useRef(null);
     const [pendingUploads, setPendingUploads] = useState([]);
 
     // Default to current local time in YYYY-MM-DDThh:mm format for datetime-local
@@ -41,56 +37,7 @@ export default function ScanPage() {
         loadPendingUploads();
     }, [loadPendingUploads]);
 
-    // Ensure the video element gets the stream once it mounts
-    useEffect(() => {
-        if (cameraActive && videoRef.current && streamRef.current) {
-            videoRef.current.srcObject = streamRef.current;
-        }
-    }, [cameraActive]);
 
-    const startCamera = useCallback(async () => {
-        try {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                if (cameraInputRef.current) {
-                    cameraInputRef.current.click();
-                } else {
-                    setError('Camera not available. Please use file upload instead.');
-                }
-                return;
-            }
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' },
-            });
-            streamRef.current = stream;
-            setCameraActive(true);
-            setError(null);
-        } catch (err) {
-            console.error('Camera error:', err);
-            setError('Live camera failed. Please use the "Upload Photo" button instead.');
-        }
-    }, []);
-
-    const stopCamera = useCallback(() => {
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach((t) => t.stop());
-            streamRef.current = null;
-        }
-        setCameraActive(false);
-    }, []);
-
-    const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current) return;
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        setPreview(dataUrl);
-        setImage(dataUrl.split(',')[1]);
-        stopCamera();
-    }, [stopCamera]);
 
     const compressImage = (file) => {
         return new Promise((resolve, reject) => {
@@ -267,7 +214,6 @@ export default function ScanPage() {
         setTextInput('');
         setImageDescription('');
         setMealTime(getLocalISOString());
-        stopCamera();
     };
 
     return (
@@ -279,7 +225,7 @@ export default function ScanPage() {
             </div>
 
             {/* Input Mode Tabs */}
-            {!preview && !cameraActive && !result && (
+            {!preview && !result && (
                 <div className="flex bg-dark-800 p-1 rounded-xl">
                     <button
                         onClick={() => setInputMode('image')}
@@ -303,10 +249,10 @@ export default function ScanPage() {
             )}
 
             {/* Camera / Upload Area */}
-            {inputMode === 'image' && !preview && !cameraActive && (
+            {inputMode === 'image' && !preview && (
                 <div className="space-y-3">
                     <button
-                        onClick={startCamera}
+                        onClick={() => cameraInputRef.current?.click()}
                         className="w-full glass rounded-2xl p-8 flex flex-col items-center gap-3 transition-all hover:bg-dark-800/80 active:scale-[0.98] group"
                     >
                         <div className="w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center group-hover:shadow-lg group-hover:shadow-primary-500/30 transition-all">
@@ -370,34 +316,6 @@ export default function ScanPage() {
                 </div>
             )}
 
-            {/* Live Camera */}
-            {cameraActive && (
-                <div className="relative rounded-2xl overflow-hidden">
-                    <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="w-full aspect-[4/3] object-cover rounded-2xl"
-                    />
-                    <div className="absolute bottom-4 left-0 right-0 flex items-center justify-center gap-4">
-                        <button
-                            onClick={stopCamera}
-                            className="w-12 h-12 bg-dark-900/80 backdrop-blur rounded-full flex items-center justify-center text-white"
-                        >
-                            <IoCloseCircle className="text-2xl" />
-                        </button>
-                        <button
-                            onClick={capturePhoto}
-                            className="w-16 h-16 gradient-primary rounded-full flex items-center justify-center shadow-lg shadow-primary-500/30 active:scale-90 transition-transform"
-                        >
-                            <div className="w-14 h-14 border-2 border-white rounded-full" />
-                        </button>
-                        <div className="w-12" />
-                    </div>
-                    <canvas ref={canvasRef} className="hidden" />
-                </div>
-            )}
 
             {/* Preview */}
             {preview && (
@@ -501,7 +419,7 @@ export default function ScanPage() {
                 </div>
             )}
             {/* Pending Uploads Queue */}
-            {pendingUploads.length > 0 && !cameraActive && !preview && (
+            {pendingUploads.length > 0 && !preview && (
                 <div className="space-y-3 mt-8">
                     <h2 className="text-dark-200 font-semibold text-lg flex items-center justify-between">
                         Pending Uploads
