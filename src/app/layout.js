@@ -32,7 +32,7 @@ export default function RootLayout({ children }) {
             <html lang="en">
                 <head>
                     <meta name="apple-mobile-web-app-capable" content="yes" />
-                    <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+                    <link rel="apple-touch-icon" href="/icons/apple_icon.png" />
                 </head>
                 <body className={`${inter.className} bg-dark-950 text-dark-100 min-h-screen md:flex`}>
                     <DesktopSidebar />
