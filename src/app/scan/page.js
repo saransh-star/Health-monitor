@@ -41,6 +41,13 @@ export default function ScanPage() {
         loadPendingUploads();
     }, [loadPendingUploads]);
 
+    // Ensure the video element gets the stream once it mounts
+    useEffect(() => {
+        if (cameraActive && videoRef.current && streamRef.current) {
+            videoRef.current.srcObject = streamRef.current;
+        }
+    }, [cameraActive]);
+
     const startCamera = useCallback(async () => {
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -52,21 +59,14 @@ export default function ScanPage() {
                 return;
             }
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } },
+                video: { facingMode: 'environment' },
             });
             streamRef.current = stream;
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-            }
             setCameraActive(true);
             setError(null);
         } catch (err) {
             console.error('Camera error:', err);
-            if (cameraInputRef.current) {
-                cameraInputRef.current.click();
-            } else {
-                setError('Camera not available. Please use file upload instead.');
-            }
+            setError('Live camera failed. Please use the "Upload Photo" button instead.');
         }
     }, []);
 
