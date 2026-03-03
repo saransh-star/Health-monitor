@@ -56,7 +56,7 @@ export async function POST(request) {
         Do NOT use markdown. Do NOT use bullet points. Make it sound like a friendly text message from a human coach.
         `;
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
         const result = await model.generateContent(prompt);
         const text = await result.response.text();
 

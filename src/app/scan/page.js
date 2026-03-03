@@ -20,6 +20,7 @@ export default function ScanPage() {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const fileInputRef = useRef(null);
+    const cameraInputRef = useRef(null);
     const streamRef = useRef(null);
     const [pendingUploads, setPendingUploads] = useState([]);
 
@@ -42,6 +43,14 @@ export default function ScanPage() {
 
     const startCamera = useCallback(async () => {
         try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                if (cameraInputRef.current) {
+                    cameraInputRef.current.click();
+                } else {
+                    setError('Camera not available. Please use file upload instead.');
+                }
+                return;
+            }
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } },
             });
@@ -52,7 +61,12 @@ export default function ScanPage() {
             setCameraActive(true);
             setError(null);
         } catch (err) {
-            setError('Camera not available. Please use file upload instead.');
+            console.error('Camera error:', err);
+            if (cameraInputRef.current) {
+                cameraInputRef.current.click();
+            } else {
+                setError('Camera not available. Please use file upload instead.');
+            }
         }
     }, []);
 
@@ -317,10 +331,17 @@ export default function ScanPage() {
                         </div>
                     </button>
                     <input
-                        ref={fileInputRef}
+                        ref={cameraInputRef}
                         type="file"
                         accept="image/*"
                         capture="environment"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                    />
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
                         onChange={handleFileSelect}
                         className="hidden"
                     />
