@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { savePendingUpload, getPendingUploads, removePendingUpload } from '../lib/storage';
 import { saveMeal } from '../actions';
+import Image from 'next/image';
 import NutritionCard from '../components/NutritionCard';
 import { IoCameraOutline, IoImageOutline, IoCloseCircle, IoCheckmarkCircle, IoRefreshOutline, IoTextOutline } from 'react-icons/io5';
 
@@ -320,8 +321,8 @@ export default function ScanPage() {
             {/* Preview */}
             {preview && (
                 <div className="space-y-4">
-                    <div className="relative rounded-2xl overflow-hidden">
-                        <img src={preview} alt="Food preview" className="w-full aspect-[4/3] object-cover" />
+                    <div className="relative rounded-2xl overflow-hidden aspect-[4/3] w-full">
+                        <Image src={preview} alt="Food preview" fill className="object-cover" unoptimized />
                         <button
                             onClick={reset}
                             className="absolute top-3 right-3 w-8 h-8 bg-dark-900/80 backdrop-blur rounded-full flex items-center justify-center text-white"
@@ -430,11 +431,13 @@ export default function ScanPage() {
                     <div className="space-y-3">
                         {pendingUploads.map((upload) => (
                             <div key={upload.id} className="glass rounded-xl p-3 flex items-center gap-4">
-                                <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-dark-800">
-                                    <img
+                                <div className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-dark-800">
+                                    <Image
                                         src={`data:${upload.mimeType};base64,${upload.image}`}
                                         alt="Pending"
-                                        className="w-full h-full object-cover"
+                                        fill
+                                        className="object-cover"
+                                        unoptimized
                                     />
                                 </div>
                                 <div className="flex-1 min-w-0">
