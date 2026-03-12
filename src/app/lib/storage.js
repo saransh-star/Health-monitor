@@ -23,7 +23,7 @@ function initDB() {
     });
 }
 
-export async function savePendingUpload(imageString, mimeType = 'image/jpeg', description = '') {
+export async function savePendingUpload(imagesArray, mimeType = 'image/jpeg', description = '') {
     try {
         const db = await initDB();
         if (!db) return;
@@ -34,7 +34,7 @@ export async function savePendingUpload(imageString, mimeType = 'image/jpeg', de
 
             const item = {
                 id: Date.now().toString(),
-                image: imageString,
+                images: imagesArray,
                 mimeType,
                 description,
                 timestamp: new Date().toISOString()

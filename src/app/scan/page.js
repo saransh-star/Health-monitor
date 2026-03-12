@@ -8,8 +8,8 @@ import NutritionCard from '../components/NutritionCard';
 import { IoCameraOutline, IoImageOutline, IoCloseCircle, IoCheckmarkCircle, IoRefreshOutline, IoTextOutline } from 'react-icons/io5';
 
 export default function ScanPage() {
-    const [image, setImage] = useState(null);
-    const [preview, setPreview] = useState(null);
+    const [images, setImages] = useState([]);
+    const [previews, setPreviews] = useState([]);
     const [analyzing, setAnalyzing] = useState(false);
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
@@ -82,24 +82,33 @@ export default function ScanPage() {
     };
 
     const handleFileSelect = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
 
         try {
-            const dataUrl = await compressImage(file);
-            setPreview(dataUrl);
-            setImage(dataUrl.split(',')[1]);
+            const newImages = [];
+            const newPreviews = [];
+            
+            for (const file of files) {
+                const dataUrl = await compressImage(file);
+                newPreviews.push(dataUrl);
+                newImages.push(dataUrl.split(',')[1]);
+            }
 
-            // Set meal time to when the photo was originally taken, if available
-            if (file.lastModified) {
-                const d = new Date(file.lastModified);
+            setPreviews(newPreviews);
+            setImages(newImages);
+
+            // Set meal time to when the first photo was originally taken, if available
+            const firstFile = files[0];
+            if (firstFile.lastModified) {
+                const d = new Date(firstFile.lastModified);
                 d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
                 setMealTime(d.toISOString().slice(0, 16));
             } else {
                 setMealTime(getLocalISOString());
             }
         } catch (err) {
-            setError('Failed to process image file');
+            setError('Failed to process image files');
         }
 
         setResult(null);
@@ -108,7 +117,7 @@ export default function ScanPage() {
     };
 
     const analyzeFood = async () => {
-        if (!image) return;
+        if (!images || images.length === 0) return;
         setAnalyzing(true);
         setError(null);
         setResult(null);
@@ -116,12 +125,12 @@ export default function ScanPage() {
             const res = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image, mimeType: 'image/jpeg', description: imageDescription }),
+                body: JSON.stringify({ images, mimeType: 'image/jpeg', description: imageDescription }),
             });
             const data = await res.json();
             if (!res.ok) {
                 if (data.code === 'AI_UNAVAILABLE_RETRY') {
-                    await savePendingUpload(image, 'image/jpeg', imageDescription);
+                    await savePendingUpload(images, 'image/jpeg', imageDescription);
                     await loadPendingUploads();
                     setError(data.error);
                     setResult(null);
@@ -163,10 +172,11 @@ export default function ScanPage() {
         setError(null);
         setResult(null);
         try {
+            const uploadImages = upload.images || (upload.image ? [upload.image] : []);
             const res = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: upload.image, mimeType: upload.mimeType, description: upload.description }),
+                body: JSON.stringify({ images: uploadImages, mimeType: upload.mimeType || 'image/jpeg', description: upload.description }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -181,8 +191,9 @@ export default function ScanPage() {
             await loadPendingUploads();
 
             setResult(data);
-            setPreview(`data:${upload.mimeType};base64,${upload.image}`);
-            setImage(upload.image);
+            const uploadImages = upload.images || (upload.image ? [upload.image] : []);
+            setPreviews(uploadImages.map(img => `data:${upload.mimeType || 'image/jpeg'};base64,${img}`));
+            setImages(uploadImages);
 
             if (upload.timestamp) {
                 const d = new Date(upload.timestamp);
@@ -207,8 +218,8 @@ export default function ScanPage() {
     };
 
     const reset = () => {
-        setImage(null);
-        setPreview(null);
+        setImages([]);
+        setPreviews([]);
         setResult(null);
         setError(null);
         setSaved(false);
@@ -226,7 +237,7 @@ export default function ScanPage() {
             </div>
 
             {/* Input Mode Tabs */}
-            {!preview && !result && (
+            {previews.length === 0 && !result && (
                 <div className="flex bg-dark-800 p-1 rounded-xl">
                     <button
                         onClick={() => setInputMode('image')}
@@ -250,7 +261,7 @@ export default function ScanPage() {
             )}
 
             {/* Camera / Upload Area */}
-            {inputMode === 'image' && !preview && (
+            {inputMode === 'image' && previews.length === 0 && (
                 <div className="space-y-3">
                     <button
                         onClick={() => cameraInputRef.current?.click()}
@@ -283,13 +294,16 @@ export default function ScanPage() {
                         accept="image/*"
                         capture="environment"
                         onChange={handleFileSelect}
+                        onClick={(e) => { e.target.value = null; }}
                         className="hidden"
                     />
                     <input
                         ref={fileInputRef}
                         type="file"
                         accept="image/*"
+                        multiple
                         onChange={handleFileSelect}
+                        onClick={(e) => { e.target.value = null; }}
                         className="hidden"
                     />
                 </div>
@@ -319,15 +333,21 @@ export default function ScanPage() {
 
 
             {/* Preview */}
-            {preview && (
-                <div className="space-y-4">
-                    <div className="relative rounded-2xl overflow-hidden aspect-[4/3] w-full">
-                        <Image src={preview} alt="Food preview" fill className="object-cover" unoptimized />
+            {previews.length > 0 && (
+                <div className="space-y-4 animate-slide-up">
+                    <div className="relative bg-dark-800/50 rounded-2xl p-2 pb-[4.5rem]">
+                        <div className={`grid gap-2 ${previews.length > 2 ? 'grid-cols-2' : previews.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                            {previews.map((prev, idx) => (
+                                <div key={idx} className="relative rounded-xl overflow-hidden aspect-[4/3] w-full">
+                                    <Image src={prev} alt={`Food preview ${idx + 1}`} fill className="object-cover" unoptimized />
+                                </div>
+                            ))}
+                        </div>
                         <button
                             onClick={reset}
-                            className="absolute top-3 right-3 w-8 h-8 bg-dark-900/80 backdrop-blur rounded-full flex items-center justify-center text-white"
+                            className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-dark-900/90 backdrop-blur px-5 py-2 rounded-full flex items-center justify-center gap-2 text-white shadow-xl hover:bg-danger/90 transition-colors text-sm font-medium z-10"
                         >
-                            <IoCloseCircle />
+                            <IoCloseCircle /> Discard Images
                         </button>
                     </div>
 
@@ -420,7 +440,7 @@ export default function ScanPage() {
                 </div>
             )}
             {/* Pending Uploads Queue */}
-            {pendingUploads.length > 0 && !preview && (
+            {pendingUploads.length > 0 && previews.length === 0 && (
                 <div className="space-y-3 mt-8">
                     <h2 className="text-dark-200 font-semibold text-lg flex items-center justify-between">
                         Pending Uploads
@@ -433,7 +453,7 @@ export default function ScanPage() {
                             <div key={upload.id} className="glass rounded-xl p-3 flex items-center gap-4">
                                 <div className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-dark-800">
                                     <Image
-                                        src={`data:${upload.mimeType};base64,${upload.image}`}
+                                        src={`data:${upload.mimeType || 'image/jpeg'};base64,${upload.images ? upload.images[0] : upload.image}`}
                                         alt="Pending"
                                         fill
                                         className="object-cover"

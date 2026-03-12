@@ -39,10 +39,12 @@ export async function POST(request) {
         // string length limits/warnings for base64 images
         const buffer = await request.arrayBuffer();
         const jsonStr = Buffer.from(buffer).toString('utf8');
-        const { image, mimeType, description } = JSON.parse(jsonStr);
+        const { image, images, mimeType, description } = JSON.parse(jsonStr);
 
-        if (!image) {
-            return NextResponse.json({ error: 'No image provided' }, { status: 400 });
+        const imgArray = images || (image ? [image] : []);
+
+        if (imgArray.length === 0) {
+            return NextResponse.json({ error: 'No images provided' }, { status: 400 });
         }
 
         if (!process.env.GOOGLE_API_KEY) {
@@ -52,21 +54,26 @@ export async function POST(request) {
             );
         }
 
+        const parts = [
+            { text: SYSTEM_PROMPT },
+            ...(description ? [{ text: `User has additionally provided this description along with the meal: ${description}` }] : []),
+        ];
+
+        imgArray.forEach(imgData => {
+            parts.push({
+                inlineData: {
+                    mimeType: mimeType || 'image/jpeg',
+                    data: imgData,
+                },
+            });
+        });
+
         const response = await genAI.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: [
                 {
                     role: 'user',
-                    parts: [
-                        { text: SYSTEM_PROMPT },
-                        ...(description ? [{ text: `User has additionally provided this description along with the image: ${description}` }] : []),
-                        {
-                            inlineData: {
-                                mimeType: mimeType || 'image/jpeg',
-                                data: image,
-                            },
-                        },
-                    ],
+                    parts: parts,
                 },
             ],
         });
