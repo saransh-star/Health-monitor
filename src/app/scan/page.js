@@ -95,17 +95,19 @@ export default function ScanPage() {
                 newImages.push(dataUrl.split(',')[1]);
             }
 
-            setPreviews(newPreviews);
-            setImages(newImages);
+            setPreviews(prev => [...prev, ...newPreviews]);
+            setImages(prev => [...prev, ...newImages]);
 
             // Set meal time to when the first photo was originally taken, if available
-            const firstFile = files[0];
-            if (firstFile.lastModified) {
-                const d = new Date(firstFile.lastModified);
-                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                setMealTime(d.toISOString().slice(0, 16));
-            } else {
-                setMealTime(getLocalISOString());
+            if (images.length === 0) {
+                const firstFile = files[0];
+                if (firstFile.lastModified) {
+                    const d = new Date(firstFile.lastModified);
+                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                    setMealTime(d.toISOString().slice(0, 16));
+                } else {
+                    setMealTime(getLocalISOString());
+                }
             }
         } catch (err) {
             setError('Failed to process image files');
@@ -114,6 +116,15 @@ export default function ScanPage() {
         setResult(null);
         setSaved(false);
         setError(null);
+    };
+
+    const removeImage = (indexToRemove) => {
+        setPreviews(prev => {
+            const newPrev = prev.filter((_, idx) => idx !== indexToRemove);
+            if (newPrev.length === 0) setTimeout(reset, 0);
+            return newPrev;
+        });
+        setImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
     };
 
     const analyzeFood = async () => {
@@ -334,21 +345,38 @@ export default function ScanPage() {
             {/* Preview */}
             {previews.length > 0 && (
                 <div className="space-y-4 animate-slide-up">
-                    <div className="relative bg-dark-800/50 rounded-2xl p-2 pb-[4.5rem]">
+                    <div className="relative bg-dark-800/50 rounded-2xl p-2">
                         <div className={`grid gap-2 ${previews.length > 2 ? 'grid-cols-2' : previews.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                             {previews.map((prev, idx) => (
-                                <div key={idx} className="relative rounded-xl overflow-hidden aspect-[4/3] w-full">
+                                <div key={idx} className="relative rounded-xl overflow-hidden aspect-[4/3] w-full group">
                                     <Image src={prev} alt={`Food preview ${idx + 1}`} fill className="object-cover" unoptimized />
+                                    <button
+                                        onClick={() => removeImage(idx)}
+                                        className="absolute top-2 right-2 w-8 h-8 bg-dark-900/80 backdrop-blur rounded-full flex items-center justify-center text-white shadow-lg hover:bg-danger/90 transition-colors z-10"
+                                    >
+                                        <IoCloseCircle className="text-xl" />
+                                    </button>
                                 </div>
                             ))}
                         </div>
-                        <button
-                            onClick={reset}
-                            className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-dark-900/90 backdrop-blur px-5 py-2 rounded-full flex items-center justify-center gap-2 text-white shadow-xl hover:bg-danger/90 transition-colors text-sm font-medium z-10"
-                        >
-                            <IoCloseCircle /> Discard Images
-                        </button>
                     </div>
+
+                    {!result && !analyzing && (
+                        <div className="flex gap-2 pb-2">
+                             <button
+                                onClick={() => cameraInputRef.current?.click()}
+                                className="flex-1 glass text-dark-200 font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:bg-dark-800/80 active:scale-[0.98] text-sm"
+                            >
+                                <IoCameraOutline className="text-lg" /> Add Photo
+                            </button>
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex-1 glass text-dark-200 font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:bg-dark-800/80 active:scale-[0.98] text-sm"
+                            >
+                                <IoImageOutline className="text-lg" /> Gallery
+                            </button>
+                        </div>
+                    )}
 
                     {!result && !analyzing && (
                         <div className="space-y-4">
