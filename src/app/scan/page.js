@@ -191,7 +191,6 @@ export default function ScanPage() {
             await loadPendingUploads();
 
             setResult(data);
-            const uploadImages = upload.images || (upload.image ? [upload.image] : []);
             setPreviews(uploadImages.map(img => `data:${upload.mimeType || 'image/jpeg'};base64,${img}`));
             setImages(uploadImages);
 
