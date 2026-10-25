@@ -5,7 +5,73 @@ import { savePendingUpload, getPendingUploads, removePendingUpload } from '../li
 import { saveMeal } from '../actions';
 import Image from 'next/image';
 import NutritionCard from '../components/NutritionCard';
-import { IoCameraOutline, IoImageOutline, IoCloseCircle, IoCheckmarkCircle, IoRefreshOutline, IoTextOutline } from 'react-icons/io5';
+import ThemeSwitcher from '../components/ThemeSwitcher';
+import {
+    LuCamera,
+    LuUpload,
+    LuFileText,
+    LuSparkles,
+    LuRefreshCw,
+    LuTrash2,
+    LuCheck,
+    LuCircleAlert,
+    LuClock,
+    LuChevronLeft,
+    LuSun,
+    LuZap,
+    LuLayers,
+} from 'react-icons/lu';
+
+// Curated demo meals for rapid testing and demonstrations
+const DEMO_MEALS = {
+    salad: {
+        foods: [
+            { name: 'Mediterranean Grilled Chicken Salad', portion: '1 large bowl (320g)', calories: 360, protein: 36, carbs: 14, fat: 16, fiber: 6 },
+            { name: 'Kalamata Olives & Extra Virgin Olive Oil', portion: '2 tbsp', calories: 90, protein: 0.5, carbs: 2, fat: 9, fiber: 1 },
+        ],
+        totalCalories: 450,
+        totalProtein: 36.5,
+        totalCarbs: 16,
+        totalFat: 25,
+        totalFiber: 7,
+        healthScore: 9,
+        weightLossTip: 'Rich in dietary fiber and lean poultry protein to sustain mid-afternoon satiety.',
+        healthierAlternative: 'Swap high-sodium dressings for fresh lemon juice and cold-pressed olive oil.',
+        isDemo: true,
+    },
+    paneer: {
+        foods: [
+            { name: 'Spiced Low-Fat Paneer Tikka', portion: '150g grilled', calories: 280, protein: 26, carbs: 8, fat: 16, fiber: 2 },
+            { name: 'Steamed Brown Basmati Rice', portion: '1 cup cooked (160g)', calories: 190, protein: 4.5, carbs: 40, fat: 1.5, fiber: 3.5 },
+            { name: 'Cucumber & Mint Raita', portion: '0.5 cup (100g)', calories: 75, protein: 4, carbs: 6, fat: 3.5, fiber: 1 },
+        ],
+        totalCalories: 545,
+        totalProtein: 34.5,
+        totalCarbs: 54,
+        totalFat: 21,
+        totalFiber: 6.5,
+        healthScore: 8,
+        weightLossTip: 'Balanced vegetarian macro ratio. High fiber from brown rice moderates glycemic response.',
+        healthierAlternative: 'Opt for non-fat Greek yogurt in raita to boost protein density by 5g.',
+        isDemo: true,
+    },
+    oatmeal: {
+        foods: [
+            { name: 'Rolled Oats in Almond Milk', portion: '1 bowl (45g dry)', calories: 180, protein: 6, carbs: 32, fat: 3.5, fiber: 5 },
+            { name: 'Wild Blueberries & Chia Seeds', portion: '0.5 cup berries + 1 tbsp chia', calories: 95, protein: 3, carbs: 14, fat: 4, fiber: 6 },
+            { name: 'Crushed Raw Almonds', portion: '15g (approx 12 nuts)', calories: 90, protein: 3.2, carbs: 3, fat: 7.8, fiber: 1.8 },
+        ],
+        totalCalories: 365,
+        totalProtein: 12.2,
+        totalCarbs: 49,
+        totalFat: 15.3,
+        totalFiber: 12.8,
+        healthScore: 10,
+        weightLossTip: 'Exceptional 13g soluble and insoluble fiber; ideal morning metabolism stabilizer.',
+        healthierAlternative: 'Stir in 1 scoop unflavored plant protein to double the protein ratio.',
+        isDemo: true,
+    },
+};
 
 export default function ScanPage() {
     const [images, setImages] = useState([]);
@@ -14,20 +80,36 @@ export default function ScanPage() {
     const [result, setResult] = useState(null);
     const [error, setError] = useState(null);
     const [saved, setSaved] = useState(false);
-    const [inputMode, setInputMode] = useState('image'); // 'image' or 'text'
+    const [inputMode, setInputMode] = useState('image'); // 'image' | 'text' | 'demo'
     const [textInput, setTextInput] = useState('');
     const [imageDescription, setImageDescription] = useState('');
+    const [refinementText, setRefinementText] = useState('');
+    const [refining, setRefining] = useState(false);
+
+    // Live Camera state
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [cameraFacing, setCameraFacing] = useState('environment');
+    const [torchOn, setTorchOn] = useState(false);
+    const [torchSupported, setTorchSupported] = useState(false);
+    const [cameraError, setCameraError] = useState(null);
+
+    const videoRef = useRef(null);
+    const streamRef = useRef(null);
     const fileInputRef = useRef(null);
-    const cameraInputRef = useRef(null);
     const [pendingUploads, setPendingUploads] = useState([]);
 
-    // Default to current local time in YYYY-MM-DDThh:mm format for datetime-local
     const getLocalISOString = () => {
         const d = new Date();
         d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
         return d.toISOString().slice(0, 16);
     };
     const [mealTime, setMealTime] = useState(getLocalISOString());
+
+    const triggerHaptic = (pattern = 10) => {
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate(pattern);
+        }
+    };
 
     const loadPendingUploads = useCallback(async () => {
         const uploads = await getPendingUploads();
@@ -38,7 +120,141 @@ export default function ScanPage() {
         loadPendingUploads();
     }, [loadPendingUploads]);
 
+    // Check query params for demo triggers
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const demoKey = params.get('demo');
+            const mode = params.get('mode');
 
+            if (demoKey && DEMO_MEALS[demoKey]) {
+                setResult(DEMO_MEALS[demoKey]);
+                setInputMode('demo');
+            } else if (mode === 'camera') {
+                setInputMode('image');
+                startCamera();
+            } else if (mode === 'upload') {
+                setInputMode('image');
+                if (fileInputRef.current) {
+                    fileInputRef.current.click();
+                }
+            } else if (mode === 'text') {
+                setInputMode('text');
+            }
+        }
+    }, []);
+
+    // Clean up camera stream on unmount
+    useEffect(() => {
+        return () => {
+            stopCamera();
+        };
+    }, []);
+
+    const startCamera = async (facing = cameraFacing) => {
+        setCameraError(null);
+        stopCamera();
+
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('Camera access is not supported by your browser.');
+            }
+
+            const constraints = {
+                video: {
+                    facingMode: { ideal: facing },
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                },
+                audio: false,
+            };
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            streamRef.current = stream;
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                await videoRef.current.play();
+            }
+
+            const track = stream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+            setTorchSupported(!!capabilities.torch);
+            setTorchOn(false);
+
+            setIsCameraActive(true);
+            triggerHaptic(12);
+        } catch (err) {
+            console.warn('Live camera error:', err);
+            setCameraError(err.message || 'Unable to access camera. You can still upload photos from file.');
+            setIsCameraActive(false);
+        }
+    };
+
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+        }
+        setIsCameraActive(false);
+        setTorchOn(false);
+    };
+
+    const toggleTorch = async () => {
+        if (!streamRef.current || !torchSupported) return;
+        try {
+            const track = streamRef.current.getVideoTracks()[0];
+            const nextState = !torchOn;
+            await track.applyConstraints({
+                advanced: [{ torch: nextState }],
+            });
+            setTorchOn(nextState);
+            triggerHaptic(10);
+        } catch (e) {
+            console.error('Failed to toggle torch', e);
+        }
+    };
+
+    const flipCamera = async () => {
+        const nextFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+        setCameraFacing(nextFacing);
+        await startCamera(nextFacing);
+    };
+
+    const captureFrame = () => {
+        if (!videoRef.current) return;
+        triggerHaptic([15, 35]);
+
+        const video = videoRef.current;
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 1200;
+        let width = video.videoWidth || 1080;
+        let height = video.videoHeight || 1920;
+
+        if (width > height) {
+            if (width > MAX_DIM) {
+                height *= MAX_DIM / width;
+                width = MAX_DIM;
+            }
+        } else {
+            if (height > MAX_DIM) {
+                width *= MAX_DIM / height;
+                height = MAX_DIM;
+            }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        const base64Data = dataUrl.split(',')[1];
+
+        setPreviews((prev) => [...prev, dataUrl]);
+        setImages((prev) => [...prev, base64Data]);
+        stopCamera();
+    };
 
     const compressImage = (file) => {
         return new Promise((resolve, reject) => {
@@ -68,10 +284,8 @@ export default function ScanPage() {
 
                     canvas.width = width;
                     canvas.height = height;
-
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
                     resolve(dataUrl);
                 };
@@ -88,17 +302,16 @@ export default function ScanPage() {
         try {
             const newImages = [];
             const newPreviews = [];
-            
+
             for (const file of files) {
                 const dataUrl = await compressImage(file);
                 newPreviews.push(dataUrl);
                 newImages.push(dataUrl.split(',')[1]);
             }
 
-            setPreviews(prev => [...prev, ...newPreviews]);
-            setImages(prev => [...prev, ...newImages]);
+            setPreviews((prev) => [...prev, ...newPreviews]);
+            setImages((prev) => [...prev, ...newImages]);
 
-            // Set meal time to when the first photo was originally taken, if available
             if (images.length === 0) {
                 const firstFile = files[0];
                 if (firstFile.lastModified) {
@@ -109,6 +322,7 @@ export default function ScanPage() {
                     setMealTime(getLocalISOString());
                 }
             }
+            triggerHaptic(10);
         } catch (err) {
             setError('Failed to process image files');
         }
@@ -119,12 +333,9 @@ export default function ScanPage() {
     };
 
     const removeImage = (indexToRemove) => {
-        setPreviews(prev => {
-            const newPrev = prev.filter((_, idx) => idx !== indexToRemove);
-            if (newPrev.length === 0) setTimeout(reset, 0);
-            return newPrev;
-        });
-        setImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
+        setPreviews((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+        setImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+        triggerHaptic(8);
     };
 
     const analyzeFood = async () => {
@@ -132,6 +343,8 @@ export default function ScanPage() {
         setAnalyzing(true);
         setError(null);
         setResult(null);
+        triggerHaptic(12);
+
         try {
             const res = await fetch('/api/analyze', {
                 method: 'POST',
@@ -149,7 +362,8 @@ export default function ScanPage() {
                 }
                 throw new Error(data.error || 'Analysis failed');
             }
-            setResult(data);
+            setResult({ ...data, isDemo: false });
+            triggerHaptic([20, 40]);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -162,6 +376,8 @@ export default function ScanPage() {
         setAnalyzing(true);
         setError(null);
         setResult(null);
+        triggerHaptic(12);
+
         try {
             const res = await fetch('/api/analyze-text', {
                 method: 'POST',
@@ -170,7 +386,8 @@ export default function ScanPage() {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Text analysis failed');
-            setResult(data);
+            setResult({ ...data, isDemo: false });
+            triggerHaptic([20, 40]);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -178,56 +395,45 @@ export default function ScanPage() {
         }
     };
 
-    const retryPendingUpload = async (upload) => {
-        setAnalyzing(true);
-        setError(null);
-        setResult(null);
+    const handleRefineWithAI = async () => {
+        if (!refinementText.trim() || !result) return;
+        setRefining(true);
+        triggerHaptic(10);
+
         try {
-            const uploadImages = upload.images || (upload.image ? [upload.image] : []);
-            const res = await fetch('/api/analyze', {
+            const currentSummary = result.foods?.map((f) => `${f.name} (${f.portion})`).join(', ');
+            const prompt = `Adjust this meal nutritional calculation based on user refinement:
+Current meal: ${currentSummary}
+Refinement note: ${refinementText}`;
+
+            const res = await fetch('/api/analyze-text', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ images: uploadImages, mimeType: upload.mimeType || 'image/jpeg', description: upload.description }),
+                body: JSON.stringify({ text: prompt }),
             });
             const data = await res.json();
-            if (!res.ok) {
-                if (data.code === 'AI_UNAVAILABLE_RETRY') {
-                    throw new Error(data.error);
-                }
-                throw new Error(data.error || 'Analysis failed');
+            if (res.ok && data.foods) {
+                setResult(data);
+                setRefinementText('');
+                triggerHaptic([20, 40]);
             }
-
-            // Remove from queue on success
-            await removePendingUpload(upload.id);
-            await loadPendingUploads();
-
-            setResult(data);
-            setPreviews(uploadImages.map(img => `data:${upload.mimeType || 'image/jpeg'};base64,${img}`));
-            setImages(uploadImages);
-
-            if (upload.timestamp) {
-                const d = new Date(upload.timestamp);
-                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                setMealTime(d.toISOString().slice(0, 16));
-            }
-        } catch (err) {
-            setError('Retry failed: ' + err.message);
+        } catch (e) {
+            console.error('Refine failed:', e);
         } finally {
-            setAnalyzing(false);
+            setRefining(false);
         }
     };
 
     const logMeal = async () => {
         if (!result) return;
-
-        // Convert local datetime back to UTC for saving
+        triggerHaptic([15, 30]);
         const isoTimestamp = new Date(mealTime).toISOString();
-
         await saveMeal(result, isoTimestamp);
         setSaved(true);
     };
 
     const reset = () => {
+        stopCamera();
         setImages([]);
         setPreviews([]);
         setResult(null);
@@ -235,285 +441,499 @@ export default function ScanPage() {
         setSaved(false);
         setTextInput('');
         setImageDescription('');
+        setRefinementText('');
         setMealTime(getLocalISOString());
     };
 
     return (
-        <div className="space-y-5 py-4 animate-fade-in">
+        <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-dark-50">Food Scanner</h1>
-                <p className="text-sm text-dark-400 mt-1">Take a photo, upload, or describe your food</p>
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--border-color)]">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
+                            AI Food Scanner
+                        </h1>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] border border-[var(--accent-primary)]/20">
+                            Gemini AI
+                        </span>
+                    </div>
+                    <p className="hidden sm:block text-xs sm:text-sm text-[var(--text-secondary)] mt-0.5">
+                        Discover calories, macronutrients, and healthy swaps with Google Gemini AI.
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <div className="hidden sm:block">
+                        <ThemeSwitcher variant="dropdown" />
+                    </div>
+                    {(previews.length > 0 || result || textInput) && (
+                        <button
+                            type="button"
+                            onClick={reset}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] hover:bg-[var(--bg-card-elevated)] text-xs font-semibold text-[var(--text-primary)] transition-colors nutri-press shadow-xs"
+                        >
+                            <LuRefreshCw className="text-xs" /> Reset
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* Input Mode Tabs */}
-            {previews.length === 0 && !result && (
-                <div className="flex bg-dark-800 p-1 rounded-xl">
+            {/* Offline queue indicator banner */}
+            {pendingUploads.length > 0 && (
+                <div className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 text-amber-400">
+                        <LuCircleAlert className="text-base shrink-0" />
+                        <span>
+                            You have {pendingUploads.length} meal scan{pendingUploads.length > 1 ? 's' : ''} saved offline in IndexedDB.
+                        </span>
+                    </div>
                     <button
+                        type="button"
+                        onClick={() => {
+                            if (pendingUploads[0]) {
+                                setPreviews(pendingUploads[0].images?.map((img) => `data:image/jpeg;base64,${img}`) || []);
+                                setImages(pendingUploads[0].images || []);
+                            }
+                        }}
+                        className="text-xs font-semibold text-amber-400 hover:underline shrink-0"
+                    >
+                        Load to retry
+                    </button>
+                </div>
+            )}
+
+            {/* Segmented Mode Selector */}
+            {!result && !isCameraActive && (
+                <div className="nutri-segmented">
+                    <button
+                        type="button"
                         onClick={() => setInputMode('image')}
-                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${inputMode === 'image'
-                            ? 'bg-dark-600 text-dark-50 shadow-sm'
-                            : 'text-dark-400 hover:text-dark-200'
-                            }`}
+                        className={`flex-1 nutri-segmented-item flex items-center justify-center gap-2 ${
+                            inputMode === 'image' ? 'nutri-segmented-item-active' : ''
+                        }`}
                     >
-                        Photo
+                        <LuCamera className="text-sm" />
+                        <span>Camera & Photo</span>
                     </button>
                     <button
+                        type="button"
                         onClick={() => setInputMode('text')}
-                        className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${inputMode === 'text'
-                            ? 'bg-dark-600 text-dark-50 shadow-sm'
-                            : 'text-dark-400 hover:text-dark-200'
-                            }`}
+                        className={`flex-1 nutri-segmented-item flex items-center justify-center gap-2 ${
+                            inputMode === 'text' ? 'nutri-segmented-item-active' : ''
+                        }`}
                     >
-                        Manual Entry
+                        <LuFileText className="text-sm" />
+                        <span>Describe Meal</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setInputMode('demo')}
+                        className={`flex-1 nutri-segmented-item flex items-center justify-center gap-2 ${
+                            inputMode === 'demo' ? 'nutri-segmented-item-active' : ''
+                        }`}
+                    >
+                        <LuSparkles className="text-sm" />
+                        <span>Sample Demos</span>
                     </button>
                 </div>
             )}
 
-            {/* Camera / Upload Area */}
-            {inputMode === 'image' && previews.length === 0 && (
-                <div className="space-y-3">
-                    <button
-                        onClick={() => cameraInputRef.current?.click()}
-                        className="w-full glass rounded-2xl p-8 flex flex-col items-center gap-3 transition-all hover:bg-dark-800/80 active:scale-[0.98] group"
-                    >
-                        <div className="w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center group-hover:shadow-lg group-hover:shadow-primary-500/30 transition-all">
-                            <IoCameraOutline className="text-white text-3xl" />
-                        </div>
-                        <div className="text-center">
-                            <p className="font-semibold text-dark-100">Open Camera</p>
-                            <p className="text-xs text-dark-400 mt-0.5">Take a photo of your meal</p>
-                        </div>
-                    </button>
+            {/* LIVE CAMERA VIEWFINDER */}
+            {inputMode === 'image' && isCameraActive && (
+                <div className="relative rounded-3xl overflow-hidden bg-black aspect-[4/5] sm:aspect-[16/10] w-full border border-[var(--border-color)] shadow-2xl animate-fade-in">
+                    <video
+                        ref={videoRef}
+                        playsInline
+                        autoPlay
+                        muted
+                        className="w-full h-full object-cover"
+                    />
 
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full glass rounded-2xl p-6 flex items-center gap-4 transition-all hover:bg-dark-800/80 active:scale-[0.98]"
-                    >
-                        <div className="w-12 h-12 bg-dark-700 rounded-xl flex items-center justify-center">
-                            <IoImageOutline className="text-dark-300 text-2xl" />
+                    {/* Viewfinder target bounds */}
+                    <div className="absolute inset-8 border border-white/30 rounded-2xl pointer-events-none flex items-center justify-center">
+                        <div className="w-16 h-16 border-t-2 border-l-2 border-[var(--accent-primary)] absolute top-0 left-0 rounded-tl-lg" />
+                        <div className="w-16 h-16 border-t-2 border-r-2 border-[var(--accent-primary)] absolute top-0 right-0 rounded-tr-lg" />
+                        <div className="w-16 h-16 border-b-2 border-l-2 border-[var(--accent-primary)] absolute bottom-0 left-0 rounded-bl-lg" />
+                        <div className="w-16 h-16 border-b-2 border-r-2 border-[var(--accent-primary)] absolute bottom-0 right-0 rounded-br-lg" />
+                    </div>
+
+                    {/* Top Camera Controls */}
+                    <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
+                        <button
+                            type="button"
+                            onClick={stopCamera}
+                            className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white nutri-press"
+                            title="Exit camera"
+                        >
+                            <LuChevronLeft className="text-lg" />
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                            {torchSupported && (
+                                <button
+                                    type="button"
+                                    onClick={toggleTorch}
+                                    className={`w-10 h-10 rounded-full backdrop-blur-md border border-white/20 flex items-center justify-center nutri-press ${
+                                        torchOn ? 'bg-amber-400 text-black' : 'bg-black/60 text-white'
+                                    }`}
+                                    title="Toggle Flashlight"
+                                >
+                                    <LuZap className="text-base" />
+                                </button>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={flipCamera}
+                                className="w-10 h-10 rounded-full bg-black/60 backdrop-blur-md border border-white/20 flex items-center justify-center text-white nutri-press"
+                                title="Flip Camera"
+                            >
+                                <LuRefreshCw className="text-base" />
+                            </button>
                         </div>
-                        <div className="text-left">
-                            <p className="font-medium text-dark-200">Upload Photo</p>
-                            <p className="text-xs text-dark-400">Select from your gallery</p>
-                        </div>
-                    </button>
-                    <input
-                        ref={cameraInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleFileSelect}
-                        onClick={(e) => { e.target.value = null; }}
-                        className="hidden"
-                    />
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleFileSelect}
-                        onClick={(e) => { e.target.value = null; }}
-                        className="hidden"
-                    />
+                    </div>
+
+                    {/* Shutter Capture Button */}
+                    <div className="absolute bottom-6 left-0 right-0 flex items-center justify-center z-10">
+                        <button
+                            type="button"
+                            onClick={captureFrame}
+                            className="w-20 h-20 rounded-full border-4 border-white bg-white/25 backdrop-blur-sm flex items-center justify-center nutri-press group"
+                            title="Capture Meal Photo"
+                            aria-label="Capture Photo"
+                        >
+                            <div className="w-14 h-14 rounded-full bg-white group-hover:scale-95 transition-transform" />
+                        </button>
+                    </div>
                 </div>
             )}
 
-            {/* Manual Text Entry Area */}
-            {inputMode === 'text' && !result && !analyzing && (
+            {/* IMAGE MODE (UPLOAD OR START CAMERA) */}
+            {inputMode === 'image' && !isCameraActive && !result && (
                 <div className="space-y-4">
-                    <div className="glass rounded-2xl p-4">
-                        <textarea
-                            value={textInput}
-                            onChange={(e) => setTextInput(e.target.value)}
-                            placeholder="Describe your meal (e.g., '2 boiled eggs and 1 slice of whole wheat toast')"
-                            className="w-full bg-transparent text-dark-100 placeholder-dark-500 focus:outline-none resize-none min-h-[120px]"
-                        ></textarea>
-                    </div>
-                    <button
-                        onClick={analyzeText}
-                        disabled={!textInput.trim()}
-                        className="w-full gradient-primary text-white font-semibold py-3.5 rounded-xl transition-all hover:shadow-lg hover:shadow-primary-500/30 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 disabled:hover:shadow-none flex items-center justify-center gap-2"
-                    >
-                        <IoTextOutline className="text-xl" />
-                        Analyze Description ✨
-                    </button>
-                </div>
-            )}
+                    {cameraError && (
+                        <div className="p-3.5 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 text-xs text-[var(--color-warning)] flex items-center gap-2">
+                            <LuCircleAlert className="text-base shrink-0" />
+                            <span>{cameraError}</span>
+                        </div>
+                    )}
 
-
-            {/* Preview */}
-            {previews.length > 0 && (
-                <div className="space-y-4 animate-slide-up">
-                    <div className="relative bg-dark-800/50 rounded-2xl p-2">
-                        <div className={`grid gap-2 ${previews.length > 2 ? 'grid-cols-2' : previews.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                            {previews.map((prev, idx) => (
-                                <div key={idx} className="relative rounded-xl overflow-hidden aspect-[4/3] w-full group">
-                                    <Image src={prev} alt={`Food preview ${idx + 1}`} fill className="object-cover" unoptimized />
-                                    <button
-                                        onClick={() => removeImage(idx)}
-                                        className="absolute top-2 right-2 w-8 h-8 bg-dark-900/80 backdrop-blur rounded-full flex items-center justify-center text-white shadow-lg hover:bg-danger/90 transition-colors z-10"
-                                    >
-                                        <IoCloseCircle className="text-xl" />
-                                    </button>
+                    {previews.length === 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Live Camera Launch Card */}
+                            <button
+                                type="button"
+                                onClick={() => startCamera()}
+                                className="nutri-card p-8 flex flex-col items-center justify-center text-center space-y-3 border-2 border-dashed border-[var(--border-color)] hover:border-[var(--accent-primary)] transition-all nutri-press group"
+                            >
+                                <div className="w-16 h-16 rounded-2xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                    <LuCamera />
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {!result && !analyzing && (
-                        <div className="flex gap-2 pb-2">
-                             <button
-                                onClick={() => cameraInputRef.current?.click()}
-                                className="flex-1 glass text-dark-200 font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:bg-dark-800/80 active:scale-[0.98] text-sm"
-                            >
-                                <IoCameraOutline className="text-lg" /> Add Photo
+                                <div>
+                                    <h3 className="font-bold text-base text-[var(--text-primary)]">
+                                        Open Live Camera
+                                    </h3>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-xs">
+                                        Point your camera at your plate or meal for real-time framing and capture.
+                                    </p>
+                                </div>
                             </button>
-                            <button
+
+                            {/* Photo Upload Card */}
+                            <div
                                 onClick={() => fileInputRef.current?.click()}
-                                className="flex-1 glass text-dark-200 font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:bg-dark-800/80 active:scale-[0.98] text-sm"
+                                className="nutri-card p-8 flex flex-col items-center justify-center text-center space-y-3 border-2 border-dashed border-[var(--border-color)] hover:border-[var(--accent-secondary)] transition-all cursor-pointer nutri-press group"
                             >
-                                <IoImageOutline className="text-lg" /> Gallery
-                            </button>
-                        </div>
-                    )}
-
-                    {!result && !analyzing && (
-                        <div className="space-y-4">
-                            <div className="glass rounded-xl p-3">
-                                <textarea
-                                    value={imageDescription}
-                                    onChange={(e) => setImageDescription(e.target.value)}
-                                    placeholder="Optional: Provide more details about the meal (amount, hidden ingredients...)"
-                                    className="w-full bg-transparent text-dark-100 placeholder-dark-500 focus:outline-none resize-none min-h-[60px] text-sm"
-                                ></textarea>
-                            </div>
-                            <button
-                                onClick={analyzeFood}
-                                className="w-full gradient-primary text-white font-semibold py-3.5 rounded-xl transition-all hover:shadow-lg hover:shadow-primary-500/30 active:scale-[0.98]"
-                            >
-                                Analyze Nutrition ✨
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Loading */}
-            {analyzing && (
-                <div className="glass rounded-2xl p-8 flex flex-col items-center gap-4">
-                    <div className="relative w-16 h-16">
-                        <div className="absolute inset-0 border-2 border-primary-500/30 rounded-full" />
-                        <div className="absolute inset-0 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-                        <div className="absolute inset-2 border-2 border-accent-500 border-b-transparent rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.8s' }} />
-                    </div>
-                    <div className="text-center">
-                        <p className="text-dark-100 font-medium">Analyzing your meal...</p>
-                        <p className="text-xs text-dark-400 mt-1">AI is identifying food items and nutrition</p>
-                    </div>
-                </div>
-            )}
-
-            {/* Error */}
-            {error && (
-                <div className="bg-danger/10 border border-danger/30 rounded-2xl p-4 flex items-start gap-3">
-                    <IoCloseCircle className="text-danger text-xl shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-danger text-sm font-medium">Analysis Failed</p>
-                        <p className="text-dark-300 text-xs mt-1">{error}</p>
-                    </div>
-                </div>
-            )}
-
-            {/* Results */}
-            {result && (
-                <div className="space-y-4 animate-slide-up">
-                    <NutritionCard meal={result} showActions={false} />
-
-                    {!saved ? (
-                        <>
-                            <div className="glass rounded-xl p-4 flex items-center justify-between">
-                                <span className="text-dark-200 text-sm font-medium">Meal Time:</span>
+                                <div className="w-16 h-16 rounded-2xl bg-[var(--accent-secondary)]/15 text-[var(--accent-secondary)] flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                    <LuUpload />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-base text-[var(--text-primary)]">
+                                        Upload from Gallery
+                                    </h3>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-xs">
+                                        Select single or multiple meal photos (JPEG, PNG, HEIC supported).
+                                    </p>
+                                </div>
                                 <input
-                                    type="datetime-local"
-                                    value={mealTime}
-                                    onChange={(e) => setMealTime(e.target.value)}
-                                    className="bg-dark-900 border border-dark-700 text-dark-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary-500"
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleFileSelect}
+                                    className="hidden"
                                 />
                             </div>
-                            <button
-                                onClick={logMeal}
-                                className="w-full gradient-primary text-white font-semibold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:shadow-primary-500/30 active:scale-[0.98]"
-                            >
-                                <IoCheckmarkCircle className="text-xl" />
-                                Log This Meal
-                            </button>
-                        </>
+                        </div>
                     ) : (
-                        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 text-center">
-                            <p className="text-green-400 text-sm font-medium flex items-center justify-center gap-2">
-                                <IoCheckmarkCircle /> Meal logged successfully!
-                            </p>
+                        /* Previews Carousel & Analysis Trigger */
+                        <div className="nutri-card p-5 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold text-[var(--text-primary)]">
+                                    Captured Photos ({previews.length})
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="text-xs text-[var(--accent-primary)] hover:underline inline-flex items-center gap-1 font-medium"
+                                >
+                                    <LuUpload className="text-xs" /> Add more
+                                </button>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleFileSelect}
+                                    className="hidden"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {previews.map((src, i) => (
+                                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-[var(--border-color)] group">
+                                        <Image
+                                            src={src}
+                                            alt={`Meal photo ${i + 1}`}
+                                            fill
+                                            unoptimized
+                                            className="object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeImage(i)}
+                                            className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/70 text-white hover:bg-red-500 transition-colors"
+                                            title="Remove photo"
+                                        >
+                                            <LuTrash2 className="text-xs" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Optional User Notes for AI Context */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-medium text-[var(--text-secondary)]">
+                                    Additional Context (Optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={imageDescription}
+                                    onChange={(e) => setImageDescription(e.target.value)}
+                                    placeholder="e.g. Cooked with 1 tbsp olive oil, no sugar added..."
+                                    className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-app)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)]"
+                                />
+                            </div>
+
+                            {/* Action Button */}
+                            <button
+                                type="button"
+                                onClick={analyzeFood}
+                                disabled={analyzing}
+                                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white font-semibold text-sm shadow-md shadow-[var(--accent-glow)] flex items-center justify-center gap-2 hover:opacity-95 transition-opacity nutri-press disabled:opacity-50"
+                            >
+                                {analyzing ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        <span>Gemini AI is analyzing ingredients & portions...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <LuSparkles className="text-base" />
+                                        <span>Analyze with Gemini Vision</span>
+                                    </>
+                                )}
+                            </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* TEXT MODE */}
+            {inputMode === 'text' && !result && (
+                <div className="nutri-card p-6 space-y-4">
+                    <div>
+                        <h2 className="text-base font-bold text-[var(--text-primary)]">
+                            Describe Your Meal
+                        </h2>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                            Type what you ate in natural language. Gemini AI will estimate portions and nutrition.
+                        </p>
+                    </div>
+
+                    <textarea
+                        rows={4}
+                        value={textInput}
+                        onChange={(e) => setTextInput(e.target.value)}
+                        placeholder="e.g. 2 scrambled eggs with 1 slice whole wheat sourdough, half an avocado, and a black coffee."
+                        className="w-full p-4 rounded-xl border border-[var(--border-color)] bg-[var(--bg-app)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] resize-none"
+                    />
 
                     <button
-                        onClick={reset}
-                        className="w-full glass text-dark-200 font-medium py-3 rounded-xl flex items-center justify-center gap-2 transition-all hover:bg-dark-800/80 active:scale-[0.98]"
+                        type="button"
+                        onClick={analyzeText}
+                        disabled={analyzing || !textInput.trim()}
+                        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white font-semibold text-sm shadow-md shadow-[var(--accent-glow)] flex items-center justify-center gap-2 hover:opacity-95 transition-opacity nutri-press disabled:opacity-50"
                     >
-                        <IoRefreshOutline />
-                        Scan Another Meal
+                        {analyzing ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Analyzing meal description...</span>
+                            </>
+                        ) : (
+                            <>
+                                <LuSparkles className="text-base" />
+                                <span>Analyze Meal</span>
+                            </>
+                        )}
                     </button>
                 </div>
             )}
-            {/* Pending Uploads Queue */}
-            {pendingUploads.length > 0 && previews.length === 0 && (
-                <div className="space-y-3 mt-8">
-                    <h2 className="text-dark-200 font-semibold text-lg flex items-center justify-between">
-                        Pending Uploads
-                        <span className="bg-orange-500/20 text-orange-400 text-xs px-2 py-1 rounded-full">
-                            {pendingUploads.length} Waiting
+
+            {/* SAMPLE DEMOS MODE */}
+            {inputMode === 'demo' && !result && (
+                <div className="space-y-4">
+                    <div className="p-4 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]">
+                        <span className="text-xs font-semibold text-[var(--text-primary)] block mb-1">
+                            Interactive Sample Meals
                         </span>
-                    </h2>
-                    <div className="space-y-3">
-                        {pendingUploads.map((upload) => (
-                            <div key={upload.id} className="glass rounded-xl p-3 flex items-center gap-4">
-                                <div className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-dark-800">
-                                    <Image
-                                        src={`data:${upload.mimeType || 'image/jpeg'};base64,${upload.images ? upload.images[0] : upload.image}`}
-                                        alt="Pending"
-                                        fill
-                                        className="object-cover"
-                                        unoptimized
-                                    />
+                        <p className="text-xs text-[var(--text-secondary)]">
+                            Experience instant multimodal nutrition analysis with real nutritional datasets.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {Object.entries(DEMO_MEALS).map(([key, demo]) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => {
+                                    setResult(demo);
+                                    triggerHaptic([15, 30]);
+                                }}
+                                className="nutri-card p-5 text-left space-y-3 hover:border-[var(--accent-primary)] transition-all nutri-press"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-[var(--accent-primary)] uppercase tracking-wider">
+                                        Sample {key}
+                                    </span>
+                                    <span className="text-xs font-bold text-[var(--text-primary)] tabular-nums">
+                                        {demo.totalCalories} kcal
+                                    </span>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-dark-200 text-sm font-medium pt-1">Saved Offline</p>
-                                    <p className="text-dark-400 text-xs">
-                                        {new Date(upload.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                    <div className="flex gap-2 mt-2">
-                                        <button
-                                            onClick={() => retryPendingUpload(upload)}
-                                            className="px-3 py-1.5 gradient-primary text-white text-xs font-semibold rounded-lg flex-1"
-                                            disabled={analyzing}
-                                        >
-                                            Retry Now
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                await removePendingUpload(upload.id);
-                                                await loadPendingUploads();
-                                            }}
-                                            className="p-1.5 text-dark-400 hover:text-danger hover:bg-danger/10 rounded-lg shrink-0 transition-colors"
-                                            disabled={analyzing}
-                                        >
-                                            <IoCloseCircle className="text-xl" />
-                                        </button>
-                                    </div>
+                                <h4 className="font-semibold text-sm text-[var(--text-primary)] line-clamp-2">
+                                    {demo.foods.map((f) => f.name).join(', ')}
+                                </h4>
+                                <div className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)] pt-2 border-t border-[var(--border-color)]">
+                                    <span>P: {demo.totalProtein}g</span>
+                                    <span>•</span>
+                                    <span>C: {demo.totalCarbs}g</span>
+                                    <span>•</span>
+                                    <span>F: {demo.totalFat}g</span>
                                 </div>
-                            </div>
+                            </button>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ANALYSIS RESULT DISPLAY */}
+            {result && (
+                <div className="space-y-5 animate-slide-up">
+                    {/* Header banner indicating status */}
+                    <div className="p-4 rounded-2xl border border-[var(--accent-primary)]/30 bg-[var(--accent-primary)]/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-[var(--accent-primary)] text-white flex items-center justify-center shrink-0">
+                                <LuCheck className="text-base" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-sm text-[var(--text-primary)]">
+                                    {result.isDemo ? 'Demonstration Meal Analysis' : 'Gemini AI Vision Analysis Complete'}
+                                </h3>
+                                <p className="text-xs text-[var(--text-secondary)]">
+                                    Review portions and tap &quot;Log This Meal&quot; to save directly into your diary.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Timestamp Picker */}
+                        <div className="flex items-center gap-2 bg-[var(--bg-card)] px-3 py-1.5 rounded-xl border border-[var(--border-color)] self-start sm:self-auto">
+                            <LuClock className="text-xs text-[var(--accent-primary)]" />
+                            <input
+                                type="datetime-local"
+                                value={mealTime}
+                                onChange={(e) => setMealTime(e.target.value)}
+                                className="bg-transparent text-xs text-[var(--text-primary)] focus:outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Nutrition Card with full editability */}
+                    <NutritionCard
+                        meal={result}
+                        isEditable={true}
+                        onMealChange={setResult}
+                        showActions={false}
+                    />
+
+                    {/* AI Delta Refine Box */}
+                    <div className="nutri-card p-4 space-y-2">
+                        <span className="text-xs font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
+                            <LuSparkles className="text-[var(--accent-primary)] text-xs" />
+                            <span>Refine with AI Instructions</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={refinementText}
+                                onChange={(e) => setRefinementText(e.target.value)}
+                                placeholder="e.g. Actually ate only half the rice, add 1 glass orange juice"
+                                className="flex-1 px-3.5 py-2 rounded-xl border border-[var(--border-color)] bg-[var(--bg-app)] text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)]"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleRefineWithAI}
+                                disabled={refining || !refinementText.trim()}
+                                className="px-4 py-2 rounded-xl bg-[var(--accent-primary)] text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity nutri-press"
+                            >
+                                {refining ? 'Refining...' : 'Update'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Final Actions */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={logMeal}
+                            disabled={saved}
+                            className={`flex-1 w-full py-4 rounded-2xl font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all nutri-press ${
+                                saved
+                                    ? 'bg-[var(--color-success)] text-white'
+                                    : 'bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white shadow-[var(--accent-glow)] hover:opacity-95'
+                            }`}
+                        >
+                            {saved ? (
+                                <>
+                                    <LuCheck className="text-base" />
+                                    <span>Meal Logged to Daily Diary!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <LuCheck className="text-base" />
+                                    <span>Log This Meal</span>
+                                </>
+                            )}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={reset}
+                            className="w-full sm:w-auto px-6 py-4 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] hover:bg-[var(--bg-card-elevated)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors nutri-press"
+                        >
+                            Scan Another Meal
+                        </button>
                     </div>
                 </div>
             )}

@@ -1,15 +1,22 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// Only protect specific routes or protect all and exclude
-// We will protect everything EXCEPT sign-in and sign-up
+// Allow viewing the application and public demo routes
 const isPublicRoute = createRouteMatcher([
+    '/',
+    '/scan(.*)',
+    '/log(.*)',
+    '/analytics(.*)',
+    '/insights(.*)',
+    '/goals(.*)',
+    '/profile(.*)',
     '/sign-in(.*)',
     '/sign-up(.*)',
-    '/api/analyze(.*)', // optionally, might want to keep public if called from external, but usually good to protect internal
+    '/api(.*)',
     '/manifest(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
+    // If route is not public, require auth
     if (!isPublicRoute(request)) {
         await auth.protect();
     }

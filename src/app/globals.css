@@ -1,127 +1,342 @@
 @import "tailwindcss";
 
+/* Class and data-theme variants */
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-primary-50: #f5f3ff;
-  --color-primary-100: #ede9fe;
-  --color-primary-200: #ddd6fe;
-  --color-primary-300: #c4b5fd;
-  --color-primary-400: #a78bfa;
-  --color-primary-500: #8b5cf6;
-  --color-primary-600: #7c3aed;
-  --color-primary-700: #6d28d9;
-  --color-primary-800: #5b21b6;
-  --color-primary-900: #4c1d95;
-  --color-primary-950: #2e1065;
-
-  --color-accent-400: #f472b6;
-  --color-accent-500: #ec4899;
-  --color-accent-600: #db2777;
-
-  --color-dark-50: #fafafa;
-  --color-dark-100: #f4f4f5;
-  --color-dark-200: #e4e4e7;
-  --color-dark-300: #d4d4d8;
-  --color-dark-400: #a1a1aa;
-  --color-dark-500: #71717a;
-  --color-dark-600: #52525b;
-  --color-dark-700: #3f3f46;
-  --color-dark-800: #27272a;
-  --color-dark-850: #1f1f22;
-  --color-dark-900: #18181b;
-  --color-dark-950: #09090b;
-
-  --color-danger: #ef4444;
-  --color-warning: #f59e0b;
-  --color-success: #22c55e;
-  --color-info: #3b82f6;
-
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  /* Shared Nutrient Colors */
+  --color-nutrient-calories: #FF6B50;
+  --color-nutrient-protein: #45D6A0;
+  --color-nutrient-carbs: #6EA8FE;
+  --color-nutrient-fat: #FFBF69;
+  --color-nutrient-fiber: #A78BFA;
+  --color-nutrient-water: #38BDF8;
 }
 
 @layer base {
+  /* ================================================================
+     THEME 1: AI Nebula (Signature Theme - Default)
+     Personality: Intelligent, sophisticated, futuristic, calm, premium
+     ================================================================ */
+  :root,
+  [data-theme="ai-nebula"] {
+    --bg-app: #0B1020;
+    --bg-sidebar: #10172A;
+    --bg-card: #151D33;
+    --bg-card-elevated: #1D2742;
+    --bg-card-glass: rgba(21, 29, 51, 0.82);
+    --bg-input: #1D2742;
+    --border-color: #293653;
+    --border-subtle: rgba(41, 54, 83, 0.6);
+    --border-input: #293653;
+    --text-primary: #F4F6FF;
+    --text-secondary: #9AA7C7;
+    --text-muted: #6B7B9E;
+    --accent-primary: #9B8CFF;
+    --accent-secondary: #6C7CFF;
+    --accent-gradient: linear-gradient(135deg, #9B8CFF 0%, #6C7CFF 100%);
+    --accent-glow: rgba(155, 140, 255, 0.25);
+    --color-success: #45D6A0;
+    --color-warning: #FFBF69;
+    --color-error: #FF718B;
+    --color-info: #61B8FF;
+    --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
+    --shadow-elevated: 0 12px 32px -4px rgba(0, 0, 0, 0.5);
+    --ring-track-opacity: 0.16;
+    --color-scheme: dark;
+  }
+
+  /* ================================================================
+     THEME 2: Midnight Mint
+     Personality: Minimal, precise, calm, wellness-oriented
+     ================================================================ */
+  [data-theme="midnight-mint"] {
+    --bg-app: #0B0F14;
+    --bg-sidebar: #10151C;
+    --bg-card: #151B23;
+    --bg-card-elevated: #1B2430;
+    --bg-card-glass: rgba(21, 27, 35, 0.82);
+    --bg-input: #1B2430;
+    --border-color: #283241;
+    --border-subtle: rgba(40, 50, 65, 0.6);
+    --border-input: #283241;
+    --text-primary: #F3F6FA;
+    --text-secondary: #96A2B4;
+    --text-muted: #677587;
+    --accent-primary: #45D6A0;
+    --accent-secondary: #64B5F6;
+    --accent-gradient: linear-gradient(135deg, #45D6A0 0%, #64B5F6 100%);
+    --accent-glow: rgba(69, 214, 160, 0.25);
+    --color-success: #45D483;
+    --color-warning: #FFB454;
+    --color-error: #FF6B6B;
+    --color-info: #64B5F6;
+    --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+    --shadow-elevated: 0 12px 32px -4px rgba(0, 0, 0, 0.55);
+    --ring-track-opacity: 0.16;
+    --color-scheme: dark;
+  }
+
+  /* ================================================================
+     THEME 3: Clinical Light
+     Personality: Trustworthy, clear, precise, professional
+     ================================================================ */
+  [data-theme="clinical-light"] {
+    --bg-app: #F4F7FB;
+    --bg-sidebar: #FFFFFF;
+    --bg-card: #FFFFFF;
+    --bg-card-elevated: #EDF2F8;
+    --bg-card-glass: rgba(255, 255, 255, 0.92);
+    --bg-input: #FFFFFF;
+    --border-color: #E1E7F0;
+    --border-subtle: rgba(225, 231, 240, 0.8);
+    --border-input: #D3DDEB;
+    --text-primary: #182230;
+    --text-secondary: #65748B;
+    --text-muted: #94A3B8;
+    --accent-primary: #635BDB;
+    --accent-secondary: #168A70;
+    --accent-gradient: linear-gradient(135deg, #635BDB 0%, #168A70 100%);
+    --accent-glow: rgba(99, 91, 219, 0.2);
+    --color-success: #168A70;
+    --color-warning: #B7791F;
+    --color-error: #D9485F;
+    --color-info: #2563EB;
+    --shadow-card: 0 2px 12px -2px rgba(24, 34, 48, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03);
+    --shadow-elevated: 0 8px 24px -4px rgba(24, 34, 48, 0.1);
+    --ring-track-opacity: 0.12;
+    --color-scheme: light;
+  }
+
+  /* ================================================================
+     THEME 4: Aurora
+     Personality: Expressive, innovative, analytical, energetic
+     ================================================================ */
+  [data-theme="aurora"] {
+    --bg-app: #0C1224;
+    --bg-sidebar: #111A30;
+    --bg-card: #17223B;
+    --bg-card-elevated: #202E4C;
+    --bg-card-glass: rgba(23, 34, 59, 0.82);
+    --bg-input: #202E4C;
+    --border-color: #2B3A59;
+    --border-subtle: rgba(43, 58, 89, 0.6);
+    --border-input: #2B3A59;
+    --text-primary: #F5F7FF;
+    --text-secondary: #A2B0D0;
+    --text-muted: #6B7FA3;
+    --accent-primary: #6EA8FE;
+    --accent-secondary: #B69CFF;
+    --accent-gradient: linear-gradient(135deg, #6EA8FE 0%, #B69CFF 100%);
+    --accent-glow: rgba(110, 168, 254, 0.25);
+    --color-success: #53D6A4;
+    --color-warning: #FFC66D;
+    --color-error: #FF8196;
+    --color-info: #6EA8FE;
+    --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.35);
+    --shadow-elevated: 0 12px 32px -4px rgba(0, 0, 0, 0.5);
+    --ring-track-opacity: 0.16;
+    --color-scheme: dark;
+  }
+
+  /* ================================================================
+     THEME 5: Forest Wellness
+     Personality: Organic, balanced, calming, connected to healthy habits
+     ================================================================ */
+  [data-theme="forest-wellness"] {
+    --bg-app: #101914;
+    --bg-sidebar: #16221A;
+    --bg-card: #1B2A21;
+    --bg-card-elevated: #25382B;
+    --bg-card-glass: rgba(27, 42, 33, 0.82);
+    --bg-input: #25382B;
+    --border-color: #314839;
+    --border-subtle: rgba(49, 72, 57, 0.6);
+    --border-input: #314839;
+    --text-primary: #F0F7F0;
+    --text-secondary: #A3B9A5;
+    --text-muted: #6B856E;
+    --accent-primary: #8AD7A0;
+    --accent-secondary: #D5E6A1;
+    --accent-gradient: linear-gradient(135deg, #8AD7A0 0%, #D5E6A1 100%);
+    --accent-glow: rgba(138, 215, 160, 0.25);
+    --color-success: #70D49A;
+    --color-warning: #F0C477;
+    --color-error: #F28A8A;
+    --color-info: #70C4D4;
+    --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+    --shadow-elevated: 0 12px 32px -4px rgba(0, 0, 0, 0.55);
+    --ring-track-opacity: 0.16;
+    --color-scheme: dark;
+  }
+
+  /* ================================================================
+     THEME 6: Warm Minimal
+     Personality: Soft, approachable, premium, human-centered
+     ================================================================ */
+  [data-theme="warm-minimal"] {
+    --bg-app: #F8F5F0;
+    --bg-sidebar: #FFFCF8;
+    --bg-card: #FFFFFF;
+    --bg-card-elevated: #F0EAE1;
+    --bg-card-glass: rgba(255, 255, 255, 0.92);
+    --bg-input: #FFFFFF;
+    --border-color: #E8E0D6;
+    --border-subtle: rgba(232, 224, 214, 0.8);
+    --border-input: #DDD3C6;
+    --text-primary: #292D35;
+    --text-secondary: #777A83;
+    --text-muted: #A3A6AF;
+    --accent-primary: #D96D62;
+    --accent-secondary: #8072D8;
+    --accent-gradient: linear-gradient(135deg, #D96D62 0%, #8072D8 100%);
+    --accent-glow: rgba(217, 109, 98, 0.2);
+    --color-success: #368A69;
+    --color-warning: #B98235;
+    --color-error: #CC4F58;
+    --color-info: #5076B8;
+    --shadow-card: 0 2px 12px -2px rgba(41, 45, 53, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+    --shadow-elevated: 0 8px 24px -4px rgba(41, 45, 53, 0.08);
+    --ring-track-opacity: 0.12;
+    --color-scheme: light;
+  }
+
   * {
     -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
   }
 
   html {
     scroll-behavior: smooth;
+    background-color: var(--bg-app);
+    color-scheme: var(--color-scheme, dark);
   }
 
   body {
-    @apply bg-dark-950 text-dark-100 font-sans antialiased;
+    background-color: var(--bg-app);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     min-height: 100dvh;
-    overscroll-behavior: none;
+    transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 
   ::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
+    height: 6px;
   }
-
   ::-webkit-scrollbar-track {
-    @apply bg-dark-900;
+    background: transparent;
   }
-
   ::-webkit-scrollbar-thumb {
-    @apply bg-dark-600 rounded-full;
+    background: var(--border-color);
+    border-radius: 9999px;
   }
 }
 
 @layer utilities {
-  .glass {
-    @apply bg-dark-800/60 backdrop-blur-xl border border-dark-700/50 shadow-lg;
+  /* NutriSnap Intelligent Wellness Cards */
+  .nutri-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-card);
+    border-radius: 1.25rem;
+    color: var(--text-primary);
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   }
 
-  .glass-strong {
-    @apply bg-dark-800/80 backdrop-blur-2xl border border-dark-700/60 shadow-xl;
+  .nutri-card-elevated {
+    background-color: var(--bg-card-elevated);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-elevated);
+    border-radius: 1.25rem;
+    color: var(--text-primary);
   }
 
-  .gradient-primary {
-    background: linear-gradient(135deg, var(--color-primary-500), var(--color-accent-500));
+  .nutri-glass {
+    background-color: var(--bg-card-glass);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-card);
+    border-radius: 1.25rem;
   }
 
-  .gradient-primary-soft {
-    background: linear-gradient(135deg, var(--color-primary-500)/0.15, var(--color-accent-500)/0.15);
+  /* Interactive Spring Press Effect */
+  .nutri-press {
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+  }
+  .nutri-press:active {
+    transform: scale(0.975);
+    opacity: 0.9;
   }
 
-  .gradient-text {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, var(--color-primary-400), var(--color-accent-400));
+  /* Segmented Controls */
+  .nutri-segmented {
+    background: var(--border-subtle);
+    padding: 3px;
+    border-radius: 0.875rem;
+    display: flex;
+    gap: 2px;
   }
 
-  .gradient-border {
-    position: relative;
+  .nutri-segmented-item {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    border-radius: 0.6875rem;
+    padding: 0.45rem 0.85rem;
+    color: var(--text-secondary);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  .gradient-border::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, var(--color-primary-500)/0.5, var(--color-accent-500)/0.5);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask-composite: exclude;
-    pointer-events: none;
+  .nutri-segmented-item-active {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-card);
+    font-weight: 600;
   }
 
+  /* Accent Utilities */
+  .text-accent-primary {
+    color: var(--accent-primary);
+  }
+  .text-accent-secondary {
+    color: var(--accent-secondary);
+  }
+  .bg-accent-primary {
+    background-color: var(--accent-primary);
+  }
+  .border-accent-primary {
+    border-color: var(--accent-primary);
+  }
+  .gradient-accent {
+    background: var(--accent-gradient);
+  }
+
+  /* Safe Area for iOS and Mobile */
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  }
+  .pt-safe {
+    padding-top: max(env(safe-area-inset-top, 0px), 12px);
   }
 
+  /* Subtle animations */
   .animate-fade-in {
-    animation: fadeIn 0.4s ease-out;
+    animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
-
   .animate-slide-up {
-    animation: slideUp 0.5s ease-out;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
-
-  .animate-scale-in {
-    animation: scaleIn 0.3s ease-out;
-  }
-
-  .animate-pulse-glow {
-    animation: pulseGlow 2s ease-in-out infinite;
+  .animate-pulse-subtle {
+    animation: pulseSubtle 2.5s infinite ease-in-out;
   }
 }
 
@@ -131,25 +346,20 @@
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.02); }
 }
 
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 20px var(--color-primary-500)/0.2; }
-  50% { box-shadow: 0 0 30px var(--color-primary-500)/0.4; }
-}
-
-@keyframes ring-progress {
-  from { stroke-dashoffset: var(--ring-circumference); }
-}
-
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,12 +1,31 @@
 'use client';
 
-import { useState } from 'react';
-import { IoSparklesOutline, IoCloseCircle } from 'react-icons/io5';
+import { useState, useEffect } from 'react';
+import { LuSparkles, LuCircleAlert, LuRefreshCw, LuShieldCheck, LuClock } from 'react-icons/lu';
+
+const STORAGE_KEY = 'nutrisnap_last_ai_insight';
 
 export default function AIInsight({ weeklyStats, profile }) {
     const [insight, setInsight] = useState('');
+    const [updatedAt, setUpdatedAt] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+
+    // Load saved insight on mount only - do NOT auto-fetch
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && parsed.insight) {
+                    setInsight(parsed.insight);
+                    setUpdatedAt(parsed.updatedAt || 'Saved recently');
+                }
+            }
+        } catch (e) {
+            console.error('Failed to read saved insight:', e);
+        }
+    }, []);
 
     const generateInsight = async () => {
         setLoading(true);
@@ -19,7 +38,25 @@ export default function AIInsight({ weeklyStats, profile }) {
             });
             const data = await response.json();
             if (data.error) throw new Error(data.error);
-            setInsight(data.insight);
+
+            const newInsight = data.insight;
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const formatted = `${dateStr}, ${timeStr}`;
+
+            setInsight(newInsight);
+            setUpdatedAt(formatted);
+
+            // Persist to localStorage
+            localStorage.setItem(
+                STORAGE_KEY,
+                JSON.stringify({
+                    insight: newInsight,
+                    updatedAt: formatted,
+                    timestamp: Date.now(),
+                })
+            );
         } catch (err) {
             setError(err.message || 'Failed to generate insight');
         } finally {
@@ -28,55 +65,87 @@ export default function AIInsight({ weeklyStats, profile }) {
     };
 
     return (
-        <div className="glass rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <IoSparklesOutline className="text-secondary-400 text-xl" />
-                    <h3 className="font-semibold text-dark-50">AI Weekly Coach</h3>
+        <div className="nutri-card p-5 space-y-3 relative overflow-hidden">
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-[var(--accent-primary)]/15 flex items-center justify-center text-[var(--accent-primary)] text-base">
+                        <LuSparkles />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-[var(--text-primary)] tracking-tight text-sm">
+                                AI Nutrition Coach
+                            </h3>
+                            <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full bg-[var(--accent-primary)]/20 text-[var(--accent-primary)]">
+                                Stored
+                            </span>
+                        </div>
+                        <p className="text-[10px] text-[var(--text-secondary)]">Weekly intake synthesis • Updates on request</p>
+                    </div>
                 </div>
+
+                {updatedAt && (
+                    <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
+                        <LuClock className="text-[9px]" /> {updatedAt}
+                    </span>
+                )}
             </div>
 
             {!insight && !loading && (
-                <div className="text-center py-2">
-                    <p className="text-sm text-dark-400 mb-4">
-                        Get personalized feedback based on your last 7 days of eating. (Vegetarian Indian diet considered)
+                <div className="text-center py-2 space-y-3">
+                    <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                        Receive personalized coaching observations generated from your recent nutrition data. We will save your insight and only update when you request.
                     </p>
                     <button
+                        type="button"
                         onClick={generateInsight}
-                        className="w-full relative group overflow-hidden rounded-xl p-[1px]"
+                        className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] text-white font-semibold text-xs shadow-md shadow-[var(--accent-glow)] flex items-center justify-center gap-2 nutri-press"
                     >
-                        <span className="absolute inset-0 bg-gradient-to-r from-secondary-500 via-primary-500 to-secondary-500 opacity-80 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></span>
-                        <div className="relative bg-dark-900/90 backdrop-blur-xl px-4 py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all duration-300 group-hover:bg-dark-800/80 mt-[1px] ml-[1px] w-[calc(100%-2px)] h-[calc(100%-2px)]">
-                            <IoSparklesOutline className="text-secondary-400" />
-                            <span className="font-semibold text-white tracking-wide">Generate AI Insight</span>
-                        </div>
+                        <LuSparkles className="text-sm" /> Generate AI Coach Insight
                     </button>
                 </div>
             )}
 
             {loading && (
-                <div className="flex items-center gap-3 p-3 bg-dark-800/50 rounded-xl animate-pulse">
-                    <div className="w-8 h-8 rounded-full bg-dark-700"></div>
-                    <div className="space-y-2 flex-1">
-                        <div className="h-3 bg-dark-700 rounded w-3/4"></div>
-                        <div className="h-3 bg-dark-700 rounded w-1/2"></div>
+                <div className="flex items-center gap-3 p-3 bg-[var(--bg-app)] rounded-xl border border-[var(--border-color)] animate-pulse">
+                    <div className="w-6 h-6 rounded-full bg-[var(--accent-primary)]/20 animate-spin" />
+                    <div className="space-y-1.5 flex-1">
+                        <div className="h-2.5 bg-[var(--border-subtle)] rounded w-3/4" />
+                        <div className="h-2.5 bg-[var(--border-subtle)] rounded w-1/2" />
                     </div>
                 </div>
             )}
 
             {error && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center mt-2">
-                    <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-red-500/20 mb-2">
-                        <IoCloseCircle className="text-red-400 text-xl" />
+                <div className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/20 rounded-xl p-3 text-center">
+                    <div className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-[var(--color-error)]/20 mb-1 text-[var(--color-error)]">
+                        <LuCircleAlert className="text-base" />
                     </div>
-                    <p className="text-sm font-medium text-red-400 mb-1">Insight Not Available</p>
-                    <p className="text-xs text-red-300/70">{error}</p>
+                    <p className="text-xs font-semibold text-[var(--color-error)]">Insight Not Available</p>
+                    <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">{error}</p>
                 </div>
             )}
 
             {insight && !loading && (
-                <div className="p-4 bg-dark-800/50 rounded-xl glow-secondary relative">
-                    <p className="text-sm leading-relaxed text-dark-200">{insight}</p>
+                <div className="space-y-2.5">
+                    <div className="p-3.5 bg-[var(--bg-app)] border border-[var(--border-color)] rounded-xl">
+                        <p className="text-xs leading-relaxed text-[var(--text-primary)] font-normal">
+                            "{insight}"
+                        </p>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)] pt-1">
+                        <span className="flex items-center gap-1">
+                            <LuShieldCheck className="text-emerald-400 text-xs" /> Stored locally
+                        </span>
+                        <button
+                            type="button"
+                            onClick={generateInsight}
+                            className="text-xs font-semibold text-[var(--accent-primary)] hover:underline inline-flex items-center gap-1"
+                        >
+                            <LuRefreshCw className="text-[10px]" /> Update Insight
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
