@@ -76,6 +76,11 @@ export async function initDb() {
 
 // ---------- Combined Fast Dashboard Bundle (1 roundtrip, 1 auth check) ----------
 export async function getDashboardBundle(timezoneOffset = 0, targetDate = null) {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - timezoneOffset);
+    const todayStr = now.toISOString().split('T')[0];
+    const effectiveDateStr = targetDate || todayStr;
+
     const { userId } = await auth();
 
     // Fast static fallback for demo / signed-out preview (0ms latency)
@@ -89,11 +94,6 @@ export async function getDashboardBundle(timezoneOffset = 0, targetDate = null) 
             activityLevel: 'moderate',
             unit: 'kg',
         };
-
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - timezoneOffset);
-        const todayStr = now.toISOString().split('T')[0];
-        const effectiveDateStr = targetDate || todayStr;
 
         const demoMeals = [
             {
@@ -166,11 +166,6 @@ export async function getDashboardBundle(timezoneOffset = 0, targetDate = null) 
             activityLevel: r.activity_level || 'moderate',
             unit: r.unit || 'kg',
         };
-
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - timezoneOffset);
-        const todayStr = now.toISOString().split('T')[0];
-        const effectiveDateStr = targetDate || todayStr;
 
         const getLocalDateStr = (timestamp) => {
             if (!timestamp) return null;
