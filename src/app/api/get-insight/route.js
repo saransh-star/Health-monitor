@@ -1,8 +1,8 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
 
 export async function POST(request) {
     try {
@@ -67,9 +67,11 @@ export async function POST(request) {
         Do NOT use markdown. Do NOT use bullet points. Make it sound like a friendly text message from a human coach.
         `;
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-        const result = await model.generateContent(prompt);
-        const text = await result.response.text();
+        const response = await genAI.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+        });
+        const text = response.text || '';
 
         return NextResponse.json({ insight: text.trim() });
 

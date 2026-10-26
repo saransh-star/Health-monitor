@@ -8,6 +8,7 @@ import NutritionCard from '../components/NutritionCard';
 import ThemeSwitcher from '../components/ThemeSwitcher';
 import {
     LuCamera,
+    LuSmartphone,
     LuUpload,
     LuFileText,
     LuSparkles,
@@ -96,6 +97,7 @@ export default function ScanPage() {
     const videoRef = useRef(null);
     const streamRef = useRef(null);
     const fileInputRef = useRef(null);
+    const nativeCameraRef = useRef(null);
     const [pendingUploads, setPendingUploads] = useState([]);
 
     const getLocalISOString = () => {
@@ -119,6 +121,34 @@ export default function ScanPage() {
     useEffect(() => {
         loadPendingUploads();
     }, [loadPendingUploads]);
+
+    // Attach stream to HTML5 video element with Android Chrome safeguards
+    const attachStreamToVideo = useCallback((videoEl) => {
+        if (!videoEl || !streamRef.current) return;
+        try {
+            if (videoEl.srcObject !== streamRef.current) {
+                videoEl.srcObject = streamRef.current;
+            }
+            videoEl.setAttribute('playsinline', 'true');
+            videoEl.setAttribute('webkit-playsinline', 'true');
+            videoEl.muted = true;
+            const playPromise = videoEl.play();
+            if (playPromise !== undefined) {
+                playPromise.catch((err) => {
+                    console.warn('Video auto-playback deferred:', err);
+                });
+            }
+        } catch (e) {
+            console.warn('Error attaching camera stream to video element:', e);
+        }
+    }, []);
+
+    // Ensure stream is bound if video element mounts after stream is acquired
+    useEffect(() => {
+        if (isCameraActive && videoRef.current && streamRef.current) {
+            attachStreamToVideo(videoRef.current);
+        }
+    }, [isCameraActive, attachStreamToVideo]);
 
     // Check query params for demo triggers
     useEffect(() => {
@@ -151,42 +181,133 @@ export default function ScanPage() {
         };
     }, []);
 
+    // Robust multi-strategy camera acquisition specifically optimized for Samsung Galaxy & Android Chrome
+    const acquireCameraStream = async (facing) => {
+        const strategies = [
+            // Strategy 1: Standard mobile 720p/1080p with ideal facingMode
+            {
+                video: {
+                    facingMode: { ideal: facing },
+                    width: { ideal: 1280, max: 1920 },
+                    height: { ideal: 720, max: 1080 },
+                },
+                audio: false,
+            },
+            // Strategy 2: Simple string facingMode (resolves OverconstrainedError on Samsung Chrome)
+            {
+                video: {
+                    facingMode: facing,
+                },
+                audio: false,
+            },
+            // Strategy 3: exact facingMode constraint
+            {
+                video: {
+                    facingMode: { exact: facing },
+                },
+                audio: false,
+            },
+        ];
+
+        let lastErr = null;
+        for (const constraints of strategies) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                if (stream && stream.getVideoTracks().length > 0) {
+                    return stream;
+                }
+            } catch (err) {
+                lastErr = err;
+                console.warn('Camera constraints attempt failed:', constraints, err.name, err.message);
+            }
+        }
+
+        // Strategy 4: Device enumeration fallback (picks primary physical rear sensor among multi-lens modules)
+        try {
+            if (navigator.mediaDevices.enumerateDevices) {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+
+                let targetDevice = null;
+                if (facing === 'environment') {
+                    targetDevice = videoInputs.find((d) =>
+                        /back|rear|environment|main/i.test(d.label)
+                    );
+                    if (!targetDevice && videoInputs.length > 0) {
+                        targetDevice = videoInputs[0];
+                    }
+                } else {
+                    targetDevice = videoInputs.find((d) =>
+                        /front|user|selfie|forward/i.test(d.label)
+                    );
+                }
+
+                if (targetDevice?.deviceId) {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { deviceId: { exact: targetDevice.deviceId } },
+                        audio: false,
+                    });
+                    if (stream && stream.getVideoTracks().length > 0) {
+                        return stream;
+                    }
+                }
+            }
+        } catch (enumErr) {
+            console.warn('Device enumeration fallback error:', enumErr);
+        }
+
+        // Strategy 5: Universal fallback
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            if (stream && stream.getVideoTracks().length > 0) {
+                return stream;
+            }
+        } catch (fallbackErr) {
+            lastErr = fallbackErr;
+        }
+
+        throw lastErr || new Error('Could not access camera on your device.');
+    };
+
     const startCamera = async (facing = cameraFacing) => {
         setCameraError(null);
         stopCamera();
 
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                throw new Error('Camera access is not supported by your browser.');
+                throw new Error('Live camera is not supported in this browser. You can use your phone camera or upload photos below.');
             }
 
-            const constraints = {
-                video: {
-                    facingMode: { ideal: facing },
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 },
-                },
-                audio: false,
-            };
-
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            const stream = await acquireCameraStream(facing);
             streamRef.current = stream;
-
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                await videoRef.current.play();
-            }
 
             const track = stream.getVideoTracks()[0];
             const capabilities = track.getCapabilities ? track.getCapabilities() : {};
             setTorchSupported(!!capabilities.torch);
             setTorchOn(false);
 
+            // Mount video element in DOM
             setIsCameraActive(true);
+
+            // If video element is already present, attach stream immediately
+            if (videoRef.current) {
+                attachStreamToVideo(videoRef.current);
+            }
+
             triggerHaptic(12);
         } catch (err) {
             console.warn('Live camera error:', err);
-            setCameraError(err.message || 'Unable to access camera. You can still upload photos from file.');
+            let userMsg = 'Unable to access back camera on this device.';
+            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                userMsg = 'Camera permission denied. Tap the lock/tune icon in the Chrome address bar to allow camera access, or tap "Phone Camera" below.';
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                userMsg = 'Camera hardware is busy in another app or tab. Close other camera apps, or tap "Phone Camera" below.';
+            } else if (err.name === 'OverconstrainedError') {
+                userMsg = 'Back camera resolution constraint unsupported by lens. Tap "Phone Camera" below.';
+            } else if (err.message) {
+                userMsg = err.message;
+            }
+            setCameraError(userMsg);
             setIsCameraActive(false);
         }
     };
@@ -223,22 +344,29 @@ export default function ScanPage() {
 
     const captureFrame = () => {
         if (!videoRef.current) return;
+        const video = videoRef.current;
+
+        // Ensure video is actively playing and has valid dimensions
+        if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+            console.warn('Video frame not ready yet for capture');
+            return;
+        }
+
         triggerHaptic([15, 35]);
 
-        const video = videoRef.current;
         const canvas = document.createElement('canvas');
         const MAX_DIM = 1200;
-        let width = video.videoWidth || 1080;
-        let height = video.videoHeight || 1920;
+        let width = video.videoWidth;
+        let height = video.videoHeight;
 
         if (width > height) {
             if (width > MAX_DIM) {
-                height *= MAX_DIM / width;
+                height = Math.round((height * MAX_DIM) / width);
                 width = MAX_DIM;
             }
         } else {
             if (height > MAX_DIM) {
-                width *= MAX_DIM / height;
+                width = Math.round((width * MAX_DIM) / height);
                 height = MAX_DIM;
             }
         }
@@ -543,10 +671,20 @@ Refinement note: ${refinementText}`;
             {inputMode === 'image' && isCameraActive && (
                 <div className="relative rounded-3xl overflow-hidden bg-black aspect-[4/5] sm:aspect-[16/10] w-full border border-[var(--border-color)] shadow-2xl animate-fade-in">
                     <video
-                        ref={videoRef}
+                        ref={(el) => {
+                            videoRef.current = el;
+                            if (el && streamRef.current) {
+                                attachStreamToVideo(el);
+                            }
+                        }}
                         playsInline
                         autoPlay
                         muted
+                        onLoadedMetadata={() => {
+                            if (videoRef.current) {
+                                videoRef.current.play().catch((err) => console.warn('Video play on metadata error:', err));
+                            }
+                        }}
                         className="w-full h-full object-cover"
                     />
 
@@ -613,29 +751,63 @@ Refinement note: ${refinementText}`;
             {inputMode === 'image' && !isCameraActive && !result && (
                 <div className="space-y-4">
                     {cameraError && (
-                        <div className="p-3.5 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning)]/10 text-xs text-[var(--color-warning)] flex items-center gap-2">
-                            <LuCircleAlert className="text-base shrink-0" />
-                            <span>{cameraError}</span>
+                        <div className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+                            <div className="flex items-center gap-2.5">
+                                <LuCircleAlert className="text-lg shrink-0 text-amber-400" />
+                                <span>{cameraError}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => nativeCameraRef.current?.click()}
+                                className="shrink-0 px-3.5 py-1.5 rounded-xl bg-amber-500 text-black font-bold text-xs flex items-center justify-center gap-1.5 nutri-press hover:bg-amber-400 shadow-xs"
+                            >
+                                <LuSmartphone className="text-sm" />
+                                Snap with Phone Camera
+                            </button>
                         </div>
                     )}
 
                     {previews.length === 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {/* Live Camera Launch Card */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {/* Live Camera Viewfinder Card */}
                             <button
                                 type="button"
                                 onClick={() => startCamera()}
-                                className="nutri-card p-8 flex flex-col items-center justify-center text-center space-y-3 border-2 border-dashed border-[var(--border-color)] hover:border-[var(--accent-primary)] transition-all nutri-press group"
+                                className="nutri-card p-6 flex flex-col items-center justify-center text-center space-y-3 border-2 border-dashed border-[var(--border-color)] hover:border-[var(--accent-primary)] transition-all nutri-press group"
                             >
-                                <div className="w-16 h-16 rounded-2xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                <div className="w-14 h-14 rounded-2xl bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                                     <LuCamera />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-base text-[var(--text-primary)]">
-                                        Open Live Camera
+                                    <h3 className="font-bold text-sm sm:text-base text-[var(--text-primary)]">
+                                        Live Viewfinder
                                     </h3>
-                                    <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-xs">
-                                        Point your camera at your plate or meal for real-time framing and capture.
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1">
+                                        Real-time camera scanner with framing bounds & live shutter.
+                                    </p>
+                                </div>
+                            </button>
+
+                            {/* Phone Camera Card (Direct Native Samsung / Mobile App) */}
+                            <button
+                                type="button"
+                                onClick={() => nativeCameraRef.current?.click()}
+                                className="nutri-card p-6 flex flex-col items-center justify-center text-center space-y-3 border-2 border-dashed border-[var(--border-color)] hover:border-emerald-400 transition-all nutri-press group"
+                            >
+                                <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                    <LuSmartphone />
+                                </div>
+                                <div>
+                                    <div className="flex items-center justify-center gap-1.5">
+                                        <h3 className="font-bold text-sm sm:text-base text-[var(--text-primary)]">
+                                            Phone Camera
+                                        </h3>
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/20">
+                                            HDR
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1">
+                                        Snap high-res photo using your phone's native camera app.
                                     </p>
                                 </div>
                             </button>
@@ -643,28 +815,39 @@ Refinement note: ${refinementText}`;
                             {/* Photo Upload Card */}
                             <div
                                 onClick={() => fileInputRef.current?.click()}
-                                className="nutri-card p-8 flex flex-col items-center justify-center text-center space-y-3 border-2 border-dashed border-[var(--border-color)] hover:border-[var(--accent-secondary)] transition-all cursor-pointer nutri-press group"
+                                className="nutri-card p-6 flex flex-col items-center justify-center text-center space-y-3 border-2 border-dashed border-[var(--border-color)] hover:border-[var(--accent-secondary)] transition-all cursor-pointer nutri-press group"
                             >
-                                <div className="w-16 h-16 rounded-2xl bg-[var(--accent-secondary)]/15 text-[var(--accent-secondary)] flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                <div className="w-14 h-14 rounded-2xl bg-[var(--accent-secondary)]/15 text-[var(--accent-secondary)] flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
                                     <LuUpload />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-base text-[var(--text-primary)]">
-                                        Upload from Gallery
+                                    <h3 className="font-bold text-sm sm:text-base text-[var(--text-primary)]">
+                                        Upload Gallery
                                     </h3>
-                                    <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-xs">
-                                        Select single or multiple meal photos (JPEG, PNG, HEIC supported).
+                                    <p className="text-xs text-[var(--text-secondary)] mt-1">
+                                        Select single or multiple photos (JPEG, PNG, HEIC).
                                     </p>
                                 </div>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    onChange={handleFileSelect}
-                                    className="hidden"
-                                />
                             </div>
+
+                            {/* Native camera capture file input for Samsung / Mobile devices */}
+                            <input
+                                ref={nativeCameraRef}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                onChange={handleFileSelect}
+                                className="hidden"
+                            />
+                            {/* Standard file picker input */}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleFileSelect}
+                                className="hidden"
+                            />
                         </div>
                     ) : (
                         /* Previews Carousel & Analysis Trigger */

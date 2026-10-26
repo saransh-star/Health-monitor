@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import MacroBar from './MacroBar';
 import {
     LuFlame,
     LuUtensils,

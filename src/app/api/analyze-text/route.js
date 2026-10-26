@@ -1,37 +1,10 @@
 import { GoogleGenAI } from '@google/genai';
 import { NextResponse } from 'next/server';
+import { NUTRITION_SYSTEM_PROMPT } from '../../lib/prompts';
 
 export const maxDuration = 60; // Allows Vercel hobby tier to run up to 60s without 504 Timeout
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
-
-const SYSTEM_PROMPT = `You are an expert nutritionist AI. Analyze the food described in the text and provide a detailed nutritional breakdown.
-
-RESPOND IN VALID JSON ONLY. No markdown, no extra text.
-
-{
-  "foods": [
-    {
-      "name": "Food item name",
-      "portion": "Estimated portion size (e.g., 1 cup, 200g)",
-      "calories": <number>,
-      "protein": <grams as number>,
-      "carbs": <grams as number>,
-      "fat": <grams as number>,
-      "fiber": <grams as number>
-    }
-  ],
-  "totalCalories": <number>,
-  "totalProtein": <number>,
-  "totalCarbs": <number>,
-  "totalFat": <number>,
-  "totalFiber": <number>,
-  "healthScore": <1-10 integer, 10 being healthiest>,
-  "weightLossTip": "Brief, actionable weight-loss advice specific to this meal",
-  "healthierAlternative": "A healthier swap suggestion for weight loss"
-}
-
-Be accurate with calorie estimates. Err on the side of slightly overestimating for weight loss safety.`;
 
 export async function POST(request) {
     try {
@@ -54,7 +27,7 @@ export async function POST(request) {
                 {
                     role: 'user',
                     parts: [
-                        { text: SYSTEM_PROMPT },
+                        { text: NUTRITION_SYSTEM_PROMPT },
                         { text: `Analyze this meal: ${text}` },
                     ],
                 },
